@@ -1,0 +1,24 @@
+# Virtual environments
+venv
+env
+.env
+
+# Python Cache
+__pycache__/
+*.py[cod]
+
+# Logs & Databases
+*.log
+soc_agent.db
+test_log.txt
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Streamlit config if it contains secrets
+# (We will not ignore .streamlit/config.toml since it holds the theme, but ignore secrets)
+.streamlit/secrets.toml
+
+# Graph outputs
+graph.html

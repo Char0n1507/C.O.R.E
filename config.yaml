@@ -1,0 +1,20 @@
+# ----------------------------------------------------
+# C.O.R.E. AI SOC Agent Configuration
+# ----------------------------------------------------
+
+agent:
+  name: "C.O.R.E."
+  log_level: "INFO"
+
+sources:
+  logs:
+    - "test_log.txt"
+    # - "/var/log/auth.log"  # System auth log (SUDO required)
+    # - "/var/log/nginx/access.log" # Nginx web server
+
+response:
+  dry_run: false         # Set to false to ACTUALLY BLOCK IPs!
+  block_threshold: 90    # Risk score threshold required to trigger an automated block
+
+analyzer:
+  use_llm: false         # Toggle the AI LLM Engine
