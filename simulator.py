@@ -7,7 +7,7 @@ LABELS = [
 ]
 
 USERS = ["root", "admin", "user", "guest", "service_account"]
-IPS = ["192.168.1.5", "10.0.0.2", "203.0.113.4", "198.51.100.1"]
+IPS = ["192.168.1.5", "10.0.0.2", "185.224.128.84", "45.133.1.20"] # Include known malicious botnet IPs for VT testing
 
 ATTACKS = [
     "Failed password for {user} from {ip} port 22 ssh2",

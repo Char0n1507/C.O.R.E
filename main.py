@@ -92,6 +92,11 @@ async def main():
     # Override config with user choice
     config["analyzer"]["use_llm"] = use_llm_mode
     config["analyzer"]["provider"] = llm_provider
+    try:
+        with open("config.yaml", "w") as f:
+            yaml.dump(config, f, default_flow_style=False)
+    except Exception as e:
+        print(f"[!] Warning: Failed to save config.yaml: {e}")
     ollama_url = config.get("analyzer", {}).get("ollama_url", "http://localhost:11434")
     ollama_model = config.get("analyzer", {}).get("ollama_model", "llama3")
     

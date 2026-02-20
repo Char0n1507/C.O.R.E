@@ -1,23 +1,14 @@
-# ----------------------------------------------------
-# C.O.R.E. AI SOC Agent Configuration
-# ----------------------------------------------------
-
 agent:
-  name: "C.O.R.E."
-  log_level: "INFO"
-
+  log_level: INFO
+  name: C.O.R.E.
+analyzer:
+  ollama_model: llama3
+  ollama_url: http://localhost:11434
+  provider: gemini
+  use_llm: true
+response:
+  block_threshold: 90
+  dry_run: false
 sources:
   logs:
-    - "test_log.txt"
-    # - "/var/log/auth.log"  # System auth log (SUDO required)
-    # - "/var/log/nginx/access.log" # Nginx web server
-
-response:
-  dry_run: false         # Set to false to ACTUALLY BLOCK IPs!
-  block_threshold: 90    # Risk score threshold required to trigger an automated block
-
-analyzer:
-  use_llm: true          # Toggle the AI LLM Engine (Requires GOOGLE_API_KEY in .env)
-  provider: "ollama"     # "gemini" or "ollama"
-  ollama_url: "http://localhost:11434" # The local Ollama API URL
-  ollama_model: "llama3" # The downloaded local Ollama model to use
+  - test_log.txt

@@ -98,7 +98,23 @@ def main():
         st.markdown("### System Status")
         st.success("🟢 Core Engine: Online")
         st.success("🟢 Database: Connected")
-        st.info("🟡 AI Analyst: Disabled (Quota)")
+        
+        import yaml
+        try:
+            with open(os.path.join(os.path.dirname(DB_PATH), "config.yaml"), "r") as f:
+                core_config = yaml.safe_load(f)
+                use_llm = core_config.get("analyzer", {}).get("use_llm", False)
+                provider = core_config.get("analyzer", {}).get("provider", "none")
+                
+                if use_llm:
+                    if provider == "gemini":
+                        st.success("🤖 AI Analyst: Gemini Pro (Live)")
+                    elif provider == "ollama":
+                        st.success("🧠 AI Analyst: Ollama (Offline)")
+                else:
+                    st.info("🟡 AI Analyst: Disabled (Rules Only)")
+        except:
+            st.info("🟡 AI Analyst: Status Unknown")
 
     # --- Main Content ---
     st.title("🛡️ Enterprise Threat Intelligence")
