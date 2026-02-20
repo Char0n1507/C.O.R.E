@@ -1,4 +1,7 @@
-# 🛡️ C.O.R.E. Enterprise AI SOC Agent
+<div align="center">
+  <img src="assets/logo.png" alt="C.O.R.E. Logo" width="300"/>
+  <h1>🛡️ C.O.R.E. Enterprise AI SOC Agent</h1>
+</div>
 
 This project is a fully-functional, AI-driven Security Operations Center (SOC) agent designed to automate detection, analysis, and response. It features stateful behavioral analytics (UEBA), interactive graph-based attack visualization, deception technology (honeypots), active firewall response, and Geo-IP Threat mapping.
 
