@@ -4,8 +4,10 @@ This project is a fully-functional, AI-driven Security Operations Center (SOC) a
 
 ## 🌟 Key Features Built
 
-1. **Intelligence Engine & Analyzer**: Ingests system logs in real-time. Features a fallback rule-based engine and the ability to integrate Google Gemini Pro for Deep AI Analysis.
-2. **UEBA (User & Entity Behavior Analytics)**: A sliding-window stateful memory module that tracks repeated failure patterns (e.g., stopping a slow brute-force attack without alerting on every single typo).
+1. **Intelligence Engine & Analyzer**: Ingests system logs in real-time. Features a fallback rule-based engine and the ability to integrate **Google Gemini Pro** for Deep AI Analysis.
+    - **How the AI Works**: If enabled, the Agent passes raw system logs directly into the Gemini Pro Large Language Model (LLM). The LLM is prompted to act as an expert cybersecurity analyst. It parses the log, identifies the underlying intent of the user/process, assigns a dynamic Risk Score (0-100), and outputs a human-readable threat analysis (e.g., *"This is a persistent brute-force attack originating from an external network"*), saving the SOC Analyst hours of manual triage.
+2. **UEBA (User & Entity Behavior Analytics)**: A sliding-window stateful memory module that tracks repeated failure patterns.
+    - **How the UEBA Works**: Instead of analyzing logs individually (stateless), the UEBA module maintains a live cache of recent IP activity. If an IP triggers 1 failed login, the risk score remains low (e.g., a simple typo). But if the UEBA detects *5 failures within 60 seconds* from the same IP, it exponentially multiplies the risk score and flags it autonomously as a "Brute Force Attack Burst", eliminating single-typo false positives and significantly reducing alert fatigue.
 3. **Deception Technology (Active Honeypot)**: Runs a fake FTP server to instantly single out network scanners and attackers with zero false positives.
 4. **Autonomous Response**: Integrates directly with Linux `iptables` to actively drop network connections of high-risk IP addresses the moment an attack is confirmed.
 5. **Interactive Dashboard & SOAR**: 
@@ -37,7 +39,19 @@ pip install -r requirements.txt
 ### 2. Configuration
 The project is centralized around a highly configurable `config.yaml` file. 
 
-Feel free to edit `config.yaml` to specify which log files to monitor (e.g., `/var/log/auth.log`) and configure the risk threshold for Autonomous IP Blocking.
+### 🚨 How to Monitor Live Network Traffic
+By default, the Agent monitors a test log file. When you are ready to switch the tool to **Live Mode**, you simply update `config.yaml` with the paths of the real service logs you want to track on your system.
+
+```yaml
+sources:
+  logs:
+    # - "test_log.txt"
+    - "/var/log/auth.log"          # Turn this on to monitor real incoming SSH/System logins!
+    - "/var/log/nginx/access.log"  # Turn this on to monitor live HTTP Web Traffic!
+```
+The C.O.R.E. ingestor daemon uses `watchdog` to monitor these files. The millisecond the Linux kernel logs an incoming packet or connection, the Agent analyzes it.
+
+Feel free to edit `config.yaml` to specify which log files to monitor and configure the risk threshold for Autonomous IP Blocking.
 
 **Important**: For the Autonomous Active Response blocking to work, your user needs explicit passwordless `sudo` privileges for the `iptables` append command. To set this up:
 1. `sudo visudo -f /etc/sudoers.d/ai_soc_agent`

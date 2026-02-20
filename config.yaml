@@ -17,4 +17,4 @@ response:
   block_threshold: 90    # Risk score threshold required to trigger an automated block
 
 analyzer:
-  use_llm: false         # Toggle the AI LLM Engine
+  use_llm: true          # Toggle the AI LLM Engine (Requires GOOGLE_API_KEY in .env)

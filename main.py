@@ -9,6 +9,17 @@ from core.analyzer import Analyzer
 from core.database import Database
 from modules.response.firewall import Firewall
 
+class Colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 # Load env vars
 load_dotenv()
 
@@ -29,20 +40,26 @@ LOG_PATHS = config.get("sources", {}).get("logs", ["test_log.txt"])
 
 async def main():
     agent_name = config.get("agent", {}).get("name", "C.O.R.E.")
-    print(f"""
-    AI SOC AGENT: {agent_name}
-    ------------------------
-    [+] Initializing Core Modules...
+    print(f"""{Colors.OKCYAN}{Colors.BOLD}
+   ____   ___  ____  _____ 
+  / ___| / _ \|  _ \| ____|
+ | |    | | | | |_) |  _|  
+ | |___ | |_| |  _ <| |___ 
+  \____| \___/|_| \_\_____|
+                           
+  AI SOC AGENT: {agent_name}
+  {Colors.ENDC}{Colors.OKBLUE}------------------------------------------------{Colors.ENDC}
     """)
+    print(f"{Colors.OKCYAN}[*] Initializing Core Modules...{Colors.ENDC}")
     
     # 0. Database
     db = Database()
-    print("[+] Connected to Alert Database (soc_agent.db)")
+    print(f"{Colors.OKGREEN}[+] Connected to Alert Database (soc_agent.db){Colors.ENDC}")
     
     # 0a. Active Response
     dry_run_mode = config.get("response", {}).get("dry_run", True)
     firewall = Firewall(dry_run=dry_run_mode)
-    print(f"[+] Active Response Module Initialized (Mode: {'DRY RUN' if dry_run_mode else 'LIVE'})")
+    print(f"{Colors.OKGREEN}[+] Active Response Module Initialized (Mode: {'DRY RUN' if dry_run_mode else 'LIVE'}){Colors.ENDC}")
     
     # 1. Processing Queue (Logs -> Q -> Analyzer)
     log_queue = asyncio.Queue()
@@ -56,7 +73,9 @@ async def main():
     use_llm_mode = config.get("analyzer", {}).get("use_llm", False)
     analyzer = Analyzer(use_llm=use_llm_mode)
     
-    print("[+] Agent is now monitoring logs for threats. Press Ctrl+C to stop.")
+    print(f"{Colors.HEADER}{Colors.BOLD}=================================================================={Colors.ENDC}")
+    print(f"{Colors.OKGREEN}[✓] C.O.R.E. is now monitoring logs for threats. Press Ctrl+C to stop.{Colors.ENDC}")
+    print(f"{Colors.HEADER}{Colors.BOLD}=================================================================={Colors.ENDC}")
     
     try:
         while True:
@@ -68,11 +87,11 @@ async def main():
             
             # Print alerts for high risk events
             if result['risk_score'] > 50:
-                print(f"\n[ALERT - RISK {result['risk_score']}] {result.get('analysis', 'Unknown Threat')}")
+                print(f"\n{Colors.FAIL}{Colors.BOLD}[🚨 THREAT DETECTED - RISK {result['risk_score']}]{Colors.ENDC} {Colors.WARNING}{result.get('analysis', 'Unknown Threat')}{Colors.ENDC}")
                 if 'action' in result:
-                    print(f"    [ACTION RECOMMENDED]: {result['action']}")
-                print(f"    Source: {result['source']}")
-                print(f"    Raw: {result['raw_content']}")
+                    print(f"    {Colors.OKCYAN}➔ [ACTION]   :{Colors.ENDC} {result['action']}")
+                print(f"    {Colors.OKBLUE}➔ [SOURCE]   :{Colors.ENDC} {result['source']}")
+                print(f"    {Colors.OKBLUE}➔ [RAW LOG]  :{Colors.ENDC} {result['raw_content']}")
                 
                 # Active Response Logic
                 threshold = config.get("response", {}).get("block_threshold", 90)

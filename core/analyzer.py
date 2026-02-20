@@ -20,7 +20,6 @@ class Analyzer:
             genai.configure(api_key=self.api_key)
             self.model = genai.GenerativeModel('gemini-pro')
         else:
-            print("[!] No GOOGLE_API_KEY found or LLM disabled. Using basic rules.")
             self.use_llm = False
 
     async def analyze_log(self, log_entry):

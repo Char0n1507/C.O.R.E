@@ -1,5 +1,5 @@
 import pycountry
-from ip2geotools.databases.noncommercial import DbIpCity
+import requests
 import logging
 
 class GeoEnricher:
@@ -18,21 +18,30 @@ class GeoEnricher:
             return self.cache[ip_address]
             
         try:
-            # Use free DbIpCity database
-            response = DbIpCity.get(ip_address, api_key='free')
+            # Use free ip-api.com endpoint
+            response = requests.get(f"http://ip-api.com/json/{ip_address}", timeout=5).json()
+            
+            if response.get("status") == "fail":
+                raise Exception(response.get("message", "ip-api failed"))
+                
+            country_name = response.get("country", "Unknown")
+            country_code = response.get("countryCode", "")
+            city = response.get("city", "Unknown")
+            lat = response.get("lat", 0.0)
+            lon = response.get("lon", 0.0)
             
             # Convert 2-letter country code to 3-letter for Plotly maps
             try:
-                country_obj = pycountry.countries.get(alpha_2=response.country)
+                country_obj = pycountry.countries.get(alpha_2=country_code)
                 alpha_3 = country_obj.alpha_3 if country_obj else "USA"
             except:
                 alpha_3 = "USA"
 
             data = {
-                "country": response.country,
-                "city": response.city,
-                "lat": response.latitude,
-                "lon": response.longitude,
+                "country": country_name,
+                "city": city,
+                "lat": lat,
+                "lon": lon,
                 "alpha_3": alpha_3
             }
             self.cache[ip_address] = data
