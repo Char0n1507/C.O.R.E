@@ -25,7 +25,7 @@ class Analyzer:
             if self.provider == "gemini" and self.api_key:
                 print("[*] Configuring Gemini Pro for Analysis...")
                 genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel('gemini-pro')
+                self.model = genai.GenerativeModel('gemini-2.5-flash')
             elif self.provider == "ollama":
                 print(f"[*] Configuring Local Ollama LLM ({self.ollama_model}) at {self.ollama_url}...")
             else:
