@@ -6,6 +6,7 @@ import google.generativeai as genai
 from google.api_core import exceptions
 from modules.ueba.behavior import BehaviorAnalyzer
 from modules.enrichment.geo import GeoEnricher
+from modules.enrichment.virustotal import VirusTotalEnricher
 import re
 
 class Analyzer:
@@ -18,6 +19,7 @@ class Analyzer:
         self.model = None
         self.ueba = BehaviorAnalyzer(time_window=60, threshold=5)
         self.geo = GeoEnricher()
+        self.vt = VirusTotalEnricher()
         
         if self.use_llm:
             if self.provider == "gemini" and self.api_key:
@@ -38,6 +40,39 @@ class Analyzer:
         """
         content = log_entry.get("content", "").lower()
         
+        # Extract IP for Enrichment
+        ip = None
+        match = re.search(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", content)
+        if match:
+            ip = match.group(1)
+            
+        # Enrich Location Map
+        loc = self.geo.get_location(ip) if ip else {"country": "Unknown", "city": "Unknown", "lat": 0.0, "lon": 0.0, "alpha_3": "USA"}
+
+        # Base Analysis Dictionary
+        base_result = {
+            "timestamp": log_entry.get("timestamp"),
+            "source": log_entry.get("source"),
+            "raw_content": log_entry.get("content"),
+            "country": loc["country"],
+            "city": loc["city"],
+            "lat": loc["lat"],
+            "lon": loc["lon"],
+            "alpha_3": loc["alpha_3"],
+            "ip": ip
+        }
+
+        # 0. VirusTotal Threat Intel (Fastest, High-Confidence)
+        vt_data = self.vt.check_ip(ip) if ip else None
+        if vt_data and vt_data.get("is_malicious"):
+            result = base_result.copy()
+            result.update({
+                "risk_score": 100,
+                "analysis": vt_data["summary"],
+                "action": "Block IP (VirusTotal Intel)"
+            })
+            return result
+
         # 1. Fast Pre-Filter (Don't waste LLM calls on noise)
         suspicious_keywords = [
             "failed", "error", "denied", "segfault", "panic", "root", "admin",
@@ -48,27 +83,26 @@ class Analyzer:
         is_suspicious = any(kw in content for kw in suspicious_keywords)
         
         if not is_suspicious:
-            return {
-                "timestamp": log_entry.get("timestamp"),
-                "source": log_entry.get("source"),
-                "raw_content": log_entry.get("content"),
+            result = base_result.copy()
+            result.update({
                 "risk_score": 0,
-                "analysis": "Routine Log"
-            }
+                "analysis": "Routine Log",
+                "action": "Monitor"
+            })
+            return result
 
         # 2. Deep Analysis (Gemini / Ollama)
         if self.use_llm:
             try:
                 # We offload the blocking API call to a thread
                 response = await asyncio.to_thread(self._query_llm, log_entry['content'])
-                return {
-                    "timestamp": log_entry.get("timestamp"),
-                    "source": log_entry.get("source"),
-                    "raw_content": log_entry.get("content"),
+                result = base_result.copy()
+                result.update({
                     "risk_score": response.get("risk_score", 50),
                     "analysis": response.get("summary", "AI Analysis Failed"),
                     "action": response.get("action", "Monitor")
-                }
+                })
+                return result
             except Exception as e:
                 print(f"[!] Gemini Analysis Error: {e}")
                 # Fallback to rules
@@ -76,14 +110,13 @@ class Analyzer:
         # Check UEBA Stateful Analysis First (for behaviors across multiple logs)
         ueba_result = self.ueba.analyze(log_entry)
         if ueba_result:
-            return {
-                "timestamp": log_entry.get("timestamp"),
-                "source": log_entry.get("source"),
-                "raw_content": log_entry.get("content"),
+            result = base_result.copy()
+            result.update({
                 "risk_score": ueba_result["risk_score"],
                 "analysis": ueba_result["analysis"],
                 "action": ueba_result["action"]
-            }
+            })
+            return result
 
         # 3. Rule-Based Fallback (Single Line Analysis)
         risk_score = 50
@@ -100,29 +133,13 @@ class Analyzer:
             risk_score = 80
             analysis = "Privileged Access Attempt"
 
-        # Extract IP for GeoEnrichment
-        ip = None
-        match = re.search(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", content)
-        if match:
-            ip = match.group(1)
-            
-        # Enrich Location Map
-        loc = self.geo.get_location(ip) if ip else {"country": "Unknown", "city": "Unknown", "lat": 0.0, "lon": 0.0, "alpha_3": "USA"}
-
-        return {
-            "timestamp": log_entry.get("timestamp"),
-            "source": log_entry.get("source"),
-            "raw_content": log_entry.get("content"),
+        result = base_result.copy()
+        result.update({
             "risk_score": risk_score,
             "analysis": analysis,
-            "action": "Monitor",
-            "country": loc["country"],
-            "city": loc["city"],
-            "lat": loc["lat"],
-            "lon": loc["lon"],
-            "alpha_3": loc["alpha_3"],
-            "ip": ip
-        }
+            "action": "Monitor"
+        })
+        return result
 
     def _query_llm(self, log_line):
         """Queries the configured LLM (Gemini or Ollama). Returns a dict."""

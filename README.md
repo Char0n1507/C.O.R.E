@@ -8,9 +8,10 @@ This project is a fully-functional, AI-driven Security Operations Center (SOC) a
     - **How the AI Works**: If enabled, the Agent passes raw system logs directly into a Large Language Model (either cloud-based Gemini or a completely private, offline, local Ollama model like `llama3`). The LLM is prompted to act as an expert cybersecurity analyst. It parses the log, identifies the underlying intent of the user/process, assigns a dynamic Risk Score (0-100), and outputs a human-readable threat analysis (e.g., *"This is a persistent brute-force attack originating from an external network"*), saving the SOC Analyst hours of manual triage.
 2. **UEBA (User & Entity Behavior Analytics)**: A sliding-window stateful memory module that tracks repeated failure patterns.
     - **How the UEBA Works**: Instead of analyzing logs individually (stateless), the UEBA module maintains a live cache of recent IP activity. If an IP triggers 1 failed login, the risk score remains low (e.g., a simple typo). But if the UEBA detects *5 failures within 60 seconds* from the same IP, it exponentially multiplies the risk score and flags it autonomously as a "Brute Force Attack Burst", eliminating single-typo false positives and significantly reducing alert fatigue.
-3. **Deception Technology (Active Honeypot)**: Runs a fake FTP server to instantly single out network scanners and attackers with zero false positives.
-4. **Autonomous Response**: Integrates directly with Linux `iptables` to actively drop network connections of high-risk IP addresses the moment an attack is confirmed.
-5. **Interactive Dashboard & SOAR**: 
+3. **Global Threat Intelligence (VirusTotal)**: Automatically extracts attacking IP addresses and cross-references them with the massive live global VirusTotal database. If an IP is flagged as malicious by multiple security vendors worldwide, C.O.R.E instantly pegs the Risk Score at `100` and drops the connection before the attack can even start!
+4. **Deception Technology (Active Honeypot)**: Runs a fake FTP server to instantly single out network scanners and attackers with zero false positives.
+5. **Autonomous Response**: Integrates directly with Linux `iptables` to actively drop network connections of high-risk IP addresses the moment an attack is confirmed.
+6. **Interactive Dashboard & SOAR**: 
     - **Live Feed**: A dark-mode, glowing Streamlit dashboard featuring live KPI metrics.
     - **Kill Chain Graph**: A NetworkX/PyVis interactive drag-and-drop web mapping Attacker IPs ➔ Targeted Users ➔ Triggered ALerts.
     - **Geo-IP Threat Map**: Automatically looks up attacking IP origins and plots them on a global Choropleth map using Plotly.
