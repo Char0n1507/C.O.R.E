@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import requests
 import google.generativeai as genai
 from google.api_core import exceptions
 from modules.ueba.behavior import BehaviorAnalyzer
@@ -8,17 +9,25 @@ from modules.enrichment.geo import GeoEnricher
 import re
 
 class Analyzer:
-    def __init__(self, use_llm=True):
+    def __init__(self, use_llm=True, provider="gemini", ollama_url="http://localhost:11434", ollama_model="llama3"):
         self.use_llm = use_llm
+        self.provider = provider
+        self.ollama_url = ollama_url
+        self.ollama_model = ollama_model
         self.api_key = os.getenv("GOOGLE_API_KEY")
         self.model = None
         self.ueba = BehaviorAnalyzer(time_window=60, threshold=5)
         self.geo = GeoEnricher()
         
-        if self.use_llm and self.api_key:
-            print("[*] Configuring Gemini Pro for Analysis...")
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
+        if self.use_llm:
+            if self.provider == "gemini" and self.api_key:
+                print("[*] Configuring Gemini Pro for Analysis...")
+                genai.configure(api_key=self.api_key)
+                self.model = genai.GenerativeModel('gemini-pro')
+            elif self.provider == "ollama":
+                print(f"[*] Configuring Local Ollama LLM ({self.ollama_model}) at {self.ollama_url}...")
+            else:
+                self.use_llm = False
         else:
             self.use_llm = False
 
@@ -47,11 +56,11 @@ class Analyzer:
                 "analysis": "Routine Log"
             }
 
-        # 2. Deep Analysis (Gemini)
+        # 2. Deep Analysis (Gemini / Ollama)
         if self.use_llm:
             try:
                 # We offload the blocking API call to a thread
-                response = await asyncio.to_thread(self._query_gemini, log_entry['content'])
+                response = await asyncio.to_thread(self._query_llm, log_entry['content'])
                 return {
                     "timestamp": log_entry.get("timestamp"),
                     "source": log_entry.get("source"),
@@ -115,8 +124,8 @@ class Analyzer:
             "ip": ip
         }
 
-    def _query_gemini(self, log_line):
-        """Queries Gemini Pro. Returns a dict."""
+    def _query_llm(self, log_line):
+        """Queries the configured LLM (Gemini or Ollama). Returns a dict."""
         prompt = f"""
         You are an expert Security Operations Center (SOC) Analyst.
         Analyze the following system log entry for security threats.
@@ -131,11 +140,29 @@ class Analyzer:
         Do not include markdown formatting or extra text. Just the JSON.
         """
         try:
-            response = self.model.generate_content(prompt)
-            text = response.text.strip()
-            # Clean up markdown if Gemini adds it
+            if self.provider == "gemini":
+                response = self.model.generate_content(prompt)
+                text = response.text.strip()
+            elif self.provider == "ollama":
+                headers = {'Content-Type': 'application/json'}
+                data = {
+                    "model": self.ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json"
+                }
+                resp = requests.post(f"{self.ollama_url}/api/generate", headers=headers, json=data, timeout=30)
+                resp.raise_for_status()
+                text = resp.json().get("response", "").strip()
+            else:
+                raise ValueError("Unknown LLM Provider configured.")
+
+            # Clean up markdown if AI adds it
             if text.startswith("```json"):
                 text = text[7:-3]
+            elif text.startswith("```"):
+                text = text[3:-3]
             return json.loads(text)
-        except Exception:
+        except Exception as e:
+            print(f"[!] LLM Analysis Error: {e}")
             return {"risk_score": 50, "summary": "AI Parsing Error", "action": "Manual Review"}

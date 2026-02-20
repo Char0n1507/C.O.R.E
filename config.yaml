@@ -18,3 +18,6 @@ response:
 
 analyzer:
   use_llm: true          # Toggle the AI LLM Engine (Requires GOOGLE_API_KEY in .env)
+  provider: "ollama"     # "gemini" or "ollama"
+  ollama_url: "http://localhost:11434" # The local Ollama API URL
+  ollama_model: "llama3" # The downloaded local Ollama model to use

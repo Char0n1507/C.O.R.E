@@ -71,7 +71,16 @@ async def main():
     
     # 3. Start Analyzer (Consumer)
     use_llm_mode = config.get("analyzer", {}).get("use_llm", False)
-    analyzer = Analyzer(use_llm=use_llm_mode)
+    llm_provider = config.get("analyzer", {}).get("provider", "gemini")
+    ollama_url = config.get("analyzer", {}).get("ollama_url", "http://localhost:11434")
+    ollama_model = config.get("analyzer", {}).get("ollama_model", "llama3")
+    
+    analyzer = Analyzer(
+        use_llm=use_llm_mode,
+        provider=llm_provider,
+        ollama_url=ollama_url,
+        ollama_model=ollama_model
+    )
     
     print(f"{Colors.HEADER}{Colors.BOLD}=================================================================={Colors.ENDC}")
     print(f"{Colors.OKGREEN}[✓] C.O.R.E. is now monitoring logs for threats. Press Ctrl+C to stop.{Colors.ENDC}")
