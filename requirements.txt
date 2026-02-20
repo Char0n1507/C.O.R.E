@@ -17,3 +17,6 @@ plotly
 pyvis
 pycountry
 streamlit
+altair
+google-generativeai
+pyyaml

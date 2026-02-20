@@ -92,6 +92,53 @@ python simulator.py
 ## 🛠️ Tech Stack
 *   **Backend Engine**: Python (AsyncIO)
 *   **Database**: SQLite (Automated table migrations included)
-*   **Visualizations**: Streamlit, Plotly, PyVis (NetworkX)
-*   **Enrichment**: ip2geotools
+*   **Visualizations**: Streamlit, Plotly, PyVis (NetworkX), Altair
+*   **Enrichment**: ip2geotools, VirusTotal API
 *   **Active Response**: Linux iptables
+
+---
+
+## 📖 For Non-Technical Users: How It Works & How to Use It
+
+If you don't know much about coding or networking, don't worry! Here is a simple explanation of how to use this tool:
+
+1. **What does this do?** It's like a smart security camera for your computer. When bad guys (hackers) try to break into your system, they usually try guessing passwords or scanning it. This tool reads the hidden logs on your computer and figures out what's happening.
+2. **How do I turn it on?** Open a terminal (the black coding screen) and type `./RunAgent.sh` (or follow the setup above). It will ask you which "Brain" or "AI Analyst" you want to use. Pick #1 to use Google's superpower brain (Gemini), or #2 to use an offline brain (Ollama).
+3. **How do I see what's happening?** Open your web browser (Chrome, Safari, etc.) and type `http://localhost:8501`. Enter the password (`admin`), and you will see a beautiful dashboard! 
+4. **What am I looking at?**
+   - **The Dashboard:** Shows how many attacks your computer has survived. 
+   - **The Geo Map:** Shows exactly where in the world the attackers are located.
+   - **The Kill Chain Graph:** A visual web showing who the hackers are trying to target on your computer.
+
+---
+
+## 📸 Screenshots & Proof of Concept (POC)
+
+Here is a visual showcase of the C.O.R.E. AI SOC Agent in action on a live instance:
+
+### 1. The Main Dashboard (Dark Mode & Glowing KPIs)
+The dynamic dashboard updates live in real-time as the agent actively drops malicious IP connections. Note the local **Ollama AI Analyst** explicitly mapped and tracking events locally.
+![Main Dashboard](assets/dashboard.png)
+
+### 2. Threat Knowledge Graph (Kill Chain View)
+An interactive drag-and-drop web showing exactly how internal users, external IPs, and active honeypot traps relate to one another during a complex multi-stage attack.
+![Threat Knowledge Graph](assets/graph.png)
+
+### 3. Global Threat Monitor (Geo-IP Map)
+The automated Choropleth map tracks the geographic origin of Cyberattacks in real-time.
+![Geo Map](assets/map.png)
+
+### 4. Direct Terminal Interface (Agent Operations)
+The glowing interface of the backend Python engine natively assigning risk scores and executing blocking routines instantly.
+![Terminal View](assets/terminal.png)
+
+---
+
+### Proof of Concept (POC)
+
+1. Run `python simulator.py`. It generates logs referencing known public botnets (e.g., `185.224.128.84`).
+2. Run `python main.py`. C.O.R.E. intercepts the log.
+3. The Regex parser extracts the IP. Before doing anything else, C.O.R.E. fires a request to the **VirusTotal API**.
+4. VirusTotal confirms `185.224.128.84` is malicious.
+5. C.O.R.E. intercepts the natural UEBA analysis, automatically boosts the Risk Score to `100`, writes a `[CRITICAL_THREAT]` tag, and uses `os.system` to inject an `iptables DROP` rule stopping the connection at the kernel level.
+6. The entire sequence finishes in `< 1500 ms` and effortlessly broadcasts across the UI!
