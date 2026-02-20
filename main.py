@@ -70,8 +70,28 @@ async def main():
     monitor.start()
     
     # 3. Start Analyzer (Consumer)
-    use_llm_mode = config.get("analyzer", {}).get("use_llm", False)
-    llm_provider = config.get("analyzer", {}).get("provider", "gemini")
+    # 3. Start Analyzer (Consumer)
+    # Interactive AI Selection
+    print(f"\n{Colors.OKCYAN}{Colors.BOLD}Select Intelligence Engine:{Colors.ENDC}")
+    print(f"  {Colors.OKGREEN}[1]{Colors.ENDC} Google Gemini Pro (Cloud)")
+    print(f"  {Colors.OKGREEN}[2]{Colors.ENDC} Local Ollama (Offline)")
+    print(f"  {Colors.OKGREEN}[3]{Colors.ENDC} Rules-Based Engine Only")
+    
+    choice = input(f"\n{Colors.OKCYAN}➔ Choose [1-3]: {Colors.ENDC}").strip()
+    
+    if choice == '1':
+        use_llm_mode = True
+        llm_provider = "gemini"
+    elif choice == '2':
+        use_llm_mode = True
+        llm_provider = "ollama"
+    else:
+        use_llm_mode = False
+        llm_provider = "none"
+        
+    # Override config with user choice
+    config["analyzer"]["use_llm"] = use_llm_mode
+    config["analyzer"]["provider"] = llm_provider
     ollama_url = config.get("analyzer", {}).get("ollama_url", "http://localhost:11434")
     ollama_model = config.get("analyzer", {}).get("ollama_model", "llama3")
     
