@@ -71,16 +71,20 @@ class LogMonitor:
         print(f"[*] Starting LogMonitor on {len(self.log_paths)} paths...")
         for path in self.log_paths:
             path = os.path.abspath(path)
+            
+            # Initialize cursor at the end of the file to skip existing logs
+            if os.path.isfile(path):
+                self.handler.file_cursors[path] = os.path.getsize(path)
+            
             if os.path.isdir(path):
                 self.observer.schedule(self.handler, path, recursive=False)
-            elif os.path.isfile(path):
+            elif os.path.isfile(path) or not os.path.exists(path):
                 # Watchdog watches directories, so we watch the parent dir
-                parent_dir = os.path.dirname(path)
-                self.observer.schedule(self.handler, parent_dir, recursive=False)
-            else:
-                print(f"[!] Path not found: {path} (Creating it...)")
-                # Create file if it doesn't exist to avoid crash
-                with open(path, 'a'): pass
+                if not os.path.exists(path):
+                    print(f"[!] Path not found: {path} (Creating it...)")
+                    with open(path, 'a'): pass
+                    self.handler.file_cursors[path] = 0
+                
                 parent_dir = os.path.dirname(path)
                 self.observer.schedule(self.handler, parent_dir, recursive=False)
 

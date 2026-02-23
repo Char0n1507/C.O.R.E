@@ -1,26 +1,24 @@
-import psycopg2
-import psycopg2.extras
+import pg8000.native
 from datetime import datetime
 
 class EnterpriseDatabase:
-    def __init__(self, host="localhost", port=5432, dbname="soc_alerts", user="soc_admin", password="super_secret_password"):
+    def __init__(self, host="localhost", port=5433, dbname="soc_alerts", user="soc_admin", password="super_secret_password"):
         self.conn_params = {
             "host": host,
             "port": port,
-            "dbname": dbname,
+            "database": dbname,
             "user": user,
             "password": password
         }
         self.init_db()
 
     def _get_conn(self):
-        return psycopg2.connect(**self.conn_params)
+        return pg8000.native.Connection(**self.conn_params)
 
     def init_db(self):
         """Create tables if they don't exist in PostgreSQL."""
         conn = self._get_conn()
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn.run('''
             CREATE TABLE IF NOT EXISTS alerts (
                 id SERIAL PRIMARY KEY,
                 timestamp TEXT,
@@ -40,46 +38,48 @@ class EnterpriseDatabase:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        conn.commit()
-        cursor.close()
         conn.close()
 
     def save_alert(self, alert_data):
         """Saves an alert dictionary to the PostgreSQL database."""
         conn = self._get_conn()
-        cursor = conn.cursor()
-        cursor.execute('''
+        res = conn.run('''
             INSERT INTO alerts (timestamp, source, risk_score, analysis, action, raw_content, country, city, lat, lon, alpha_3, ip, mitre_tactic, mitre_technique)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (:timestamp, :source, :risk_score, :analysis, :action, :raw_content, :country, :city, :lat, :lon, :alpha_3, :ip, :mitre_tactic, :mitre_technique)
             RETURNING id
-        ''', (
-            alert_data.get('timestamp'),
-            alert_data.get('source'),
-            alert_data.get('risk_score'),
-            alert_data.get('analysis'),
-            alert_data.get('action', 'Monitor'),
-            alert_data.get('raw_content'),
-            alert_data.get('country'),
-            alert_data.get('city'),
-            alert_data.get('lat'),
-            alert_data.get('lon'),
-            alert_data.get('alpha_3'),
-            alert_data.get('ip'),
-            alert_data.get('mitre_tactic', 'Unknown'),
-            alert_data.get('mitre_technique', 'Unknown')
-        ))
-        row_id = cursor.fetchone()[0]
-        conn.commit()
-        cursor.close()
+        ''', 
+            timestamp=alert_data.get('timestamp'),
+            source=alert_data.get('source'),
+            risk_score=alert_data.get('risk_score'),
+            analysis=alert_data.get('analysis'),
+            action=alert_data.get('action', 'Monitor'),
+            raw_content=alert_data.get('raw_content'),
+            country=alert_data.get('country'),
+            city=alert_data.get('city'),
+            lat=alert_data.get('lat'),
+            lon=alert_data.get('lon'),
+            alpha_3=alert_data.get('alpha_3'),
+            ip=alert_data.get('ip'),
+            mitre_tactic=alert_data.get('mitre_tactic', 'Unknown'),
+            mitre_technique=alert_data.get('mitre_technique', 'Unknown')
+        )
         conn.close()
-        return row_id
+        return res[0][0]
 
     def get_recent_alerts(self, limit=50):
         """Fetch recent alerts for the dashboard."""
         conn = self._get_conn()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cursor.execute('SELECT * FROM alerts ORDER BY id DESC LIMIT %s', (limit,))
-        results = [dict(row) for row in cursor.fetchall()]
-        cursor.close()
+        # pg8000 native run returns a list of lists, and .columns provides column names
+        rows = conn.run('SELECT * FROM alerts ORDER BY id DESC LIMIT :limit', limit=limit)
+        columns = [col['name'] for col in conn.columns]
+        results = [dict(zip(columns, row)) for row in rows]
         conn.close()
         return results
+
+    def get_stats(self):
+        """Get high-level stats."""
+        conn = self._get_conn()
+        total = conn.run('SELECT COUNT(*) FROM alerts')[0][0]
+        critical = conn.run('SELECT COUNT(*) FROM alerts WHERE risk_score > 80')[0][0]
+        conn.close()
+        return {"total": total, "critical": critical}

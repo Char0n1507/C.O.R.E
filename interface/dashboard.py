@@ -45,18 +45,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "soc_agent.db")
+import sys
+import os
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(PROJECT_ROOT)
+from core.database_enterprise import EnterpriseDatabase
+
+DB_PATH = os.path.join(PROJECT_ROOT, "soc_agent.db")
 
 @st.cache_data(ttl=1)
 def load_data():
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            query = "SELECT * FROM alerts ORDER BY id DESC LIMIT 500"
-            df = pd.read_sql_query(query, conn)
-            if not df.empty:
-                # Convert epoch timestamp to readable datetime
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-            return df
+        db = EnterpriseDatabase()
+        alerts = db.get_recent_alerts(limit=500)
+        df = pd.DataFrame(alerts)
+        if not df.empty:
+            # Convert epoch timestamp string (origin unix) to readable datetime
+            df['timestamp'] = pd.to_datetime(df['timestamp'], origin='unix', unit='s', errors='coerce')
+        return df
     except Exception as e:
         st.error(f"Error loading database: {e}")
         return pd.DataFrame()
@@ -158,8 +164,7 @@ def main():
             
             # Fetch real total count bypassing the 500 limit display query
             try:
-                with sqlite3.connect(DB_PATH) as _conn:
-                    real_total = pd.read_sql_query("SELECT COUNT(*) as c FROM alerts", _conn).iloc[0]['c']
+                real_total = EnterpriseDatabase().get_stats()['total']
             except:
                 real_total = len(filtered_df)
                 
@@ -366,16 +371,22 @@ def main():
                         if sql_query and not error_msg:
                             st.markdown(f"**Execution:** `{sql_query}`")
                             try:
-                                with sqlite3.connect(DB_PATH) as conn:
-                                    if not sql_query.upper().lstrip().startswith("SELECT"):
-                                        st.error("For safety reasons, only SELECT SQL queries are allowed in the Threat Hunter.")
-                                    else:
-                                        result_df = pd.read_sql_query(sql_query, conn)
-                                        if not result_df.empty and 'timestamp' in result_df.columns:
-                                            try:
-                                                result_df['timestamp'] = pd.to_datetime(result_df['timestamp'], unit='s')
-                                            except:
-                                                pass
+                                if not sql_query.upper().lstrip().startswith("SELECT"):
+                                    st.error("For safety reasons, only SELECT SQL queries are allowed in the Threat Hunter.")
+                                else:
+                                    db = EnterpriseDatabase()
+                                    conn = db._get_conn()
+                                    rows = conn.run(sql_query)
+                                    columns = [col['name'] for col in conn.columns]
+                                    conn.close()
+                                    
+                                    result_df = pd.DataFrame(rows, columns=columns)
+                                    
+                                    if not result_df.empty and 'timestamp' in result_df.columns:
+                                        try:
+                                            result_df['timestamp'] = pd.to_datetime(result_df['timestamp'], origin='unix', unit='s', errors='coerce')
+                                        except:
+                                            pass
                                         
                                         st.dataframe(result_df, use_container_width=True)
                                         st.caption(f"Found {len(result_df)} specific results matching your criteria.")

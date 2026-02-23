@@ -4,10 +4,10 @@ import signal
 import sys
 import yaml
 from dotenv import load_dotenv
-from core.ingestor import LogMonitor
+from core.ingestor_enterprise import EnterpriseKafkaMonitor
 from core.email_monitor import EmailMonitor
 from core.analyzer import Analyzer
-from core.database import Database
+from core.database_enterprise import EnterpriseDatabase
 from modules.response.firewall import Firewall
 from core.reporter import generate_daily_report
 import schedule
@@ -56,8 +56,8 @@ async def main():
     print(f"{Colors.OKCYAN}[*] Initializing Core Modules...{Colors.ENDC}")
     
     # 0. Database
-    db = Database()
-    print(f"{Colors.OKGREEN}[+] Connected to Alert Database (soc_agent.db){Colors.ENDC}")
+    db = EnterpriseDatabase()
+    print(f"{Colors.OKGREEN}[+] Connected to Enterprise PostgreSQL Database (soc_alerts){Colors.ENDC}")
     
     # 0a. Active Response
     dry_run_mode = config.get("response", {}).get("dry_run", True)
@@ -69,7 +69,7 @@ async def main():
     loop = asyncio.get_running_loop()
     
     # 2. Start Log Monitor (Producer)
-    monitor = LogMonitor(LOG_PATHS, log_queue, loop)
+    monitor = EnterpriseKafkaMonitor("localhost:9092", ["enterprise-logs", "auth-logs"], log_queue, loop)
     monitor.start()
     
     # 2a. Start Email Monitor (Producer)

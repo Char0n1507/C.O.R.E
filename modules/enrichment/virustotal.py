@@ -1,6 +1,7 @@
 import requests
 import logging
 import os
+import base64
 
 class VirusTotalEnricher:
     """Queries the VirusTotal API to check IP reputation."""
@@ -59,4 +60,52 @@ class VirusTotalEnricher:
                 
         except Exception as e:
             logging.debug(f"[!] VirusTotal Request Failed: {e}")
+            return None
+
+    def check_url(self, url):
+        """
+        Queries VT for the given URL. Returns a dict with risk score.
+        If the URL is malicious engines >= 3, it's flagged as high risk.
+        """
+        if not url or not self.api_key:
+            return None
+            
+        if url in self.cache:
+            return self.cache[url]
+
+        headers = {
+            "accept": "application/json",
+            "x-apikey": self.api_key
+        }
+
+        try:
+            logging.debug(f"[*] Querying VirusTotal for URL: {url}")
+            # VT API v3 requires URL identifiers to be base64 url-safe without padding
+            url_id = base64.urlsafe_b64encode(url.encode()).decode().strip("=")
+            response = requests.get(f"https://www.virustotal.com/api/v3/urls/{url_id}", headers=headers, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                stats = data["data"]["attributes"]["last_analysis_stats"]
+                
+                malicious = stats.get("malicious", 0)
+                suspicious = stats.get("suspicious", 0)
+                
+                is_malicious = malicious >= 3
+                
+                result = {
+                    "malicious_votes": malicious,
+                    "suspicious_votes": suspicious,
+                    "is_malicious": is_malicious,
+                    "summary": f"Known Malicious URL! Flagged by {malicious} security engines on VirusTotal." if is_malicious else "Clean/Unknown URL on VirusTotal"
+                }
+                
+                self.cache[url] = result
+                return result
+            else:
+                logging.debug(f"[!] VirusTotal API Error: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logging.debug(f"[!] VirusTotal URL Request Failed: {e}")
             return None

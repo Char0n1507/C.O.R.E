@@ -4,11 +4,17 @@ agent:
 analyzer:
   ollama_model: llama3
   ollama_url: http://localhost:11434
-  provider: gemini
+  provider: ollama
   use_llm: true
 response:
   block_threshold: 90
   dry_run: false
 sources:
+  email:
+    enabled: true
+    folder: INBOX
+    password: password
+    server: imap.example.com
+    username: security@example.com
   logs:
   - test_log.txt
