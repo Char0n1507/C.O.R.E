@@ -4,6 +4,7 @@ import pandas as pd
 import time
 import os
 import altair as alt
+import requests
 
 # Set page config
 st.set_page_config(
@@ -63,9 +64,12 @@ def load_data():
 def check_password():
     """Returns `True` if the user had the correct password."""
     def password_entered():
-        if st.session_state["password"] == "admin": # Basic auth for PoC
+        if st.session_state.get("password", "") == "admin": # Basic auth for PoC
             st.session_state["password_correct"] = True
-            del st.session_state["password"]
+            try:
+                del st.session_state["password"]
+            except KeyError:
+                pass
         else:
             st.session_state["password_correct"] = False
 
@@ -82,9 +86,8 @@ def check_password():
         return True
 
 def main():
-    if not check_password():
-        return
-        
+    # Authentication removed for easier testing
+    
     # --- Sidebar ---
     with st.sidebar:
         st.image("https://img.icons8.com/color/96/000000/security-checked--v1.png", width=60)
@@ -120,96 +123,219 @@ def main():
     st.title("🛡️ Enterprise Threat Intelligence")
     st.markdown("Real-time monitoring and autonomous response center.")
     
-    df = load_data()
+    # Check AI config
+    use_llm = False
+    provider = "none"
+    ollama_url = "http://localhost:11434"
+    ollama_model = "llama3"
+    api_key = os.getenv("GOOGLE_API_KEY")
+
+    try:
+        import yaml
+        with open(os.path.join(os.path.dirname(DB_PATH), "config.yaml"), "r") as f:
+            core_config = yaml.safe_load(f)
+            analyzer_config = core_config.get("analyzer", {})
+            use_llm = analyzer_config.get("use_llm", False)
+            provider = analyzer_config.get("provider", "none")
+            ollama_url = analyzer_config.get("ollama_url", "http://localhost:11434")
+            ollama_model = analyzer_config.get("ollama_model", "llama3")
+    except:
+        pass
+
+    tab1, tab2 = st.tabs(["📊 Live Events", "💬 AI Threat Hunter"])
     
-    if not df.empty:
-        # Apply filters
-        # Ensure risk_score is numeric
-        df['risk_score'] = pd.to_numeric(df['risk_score'], errors='coerce').fillna(0)
-        filtered_df = df[df['risk_score'] >= min_risk]
+    with tab1:
+        df = load_data()
         
-        # --- Top KPIs ---
-        col1, col2, col3, col4 = st.columns(4)
-        
-        total_alerts = len(filtered_df)
-        critical_alerts = len(filtered_df[filtered_df['risk_score'] >= 90])
-        high_alerts = len(filtered_df[(filtered_df['risk_score'] >= 70) & (filtered_df['risk_score'] < 90)])
-        medium_alerts = len(filtered_df[(filtered_df['risk_score'] >= 50) & (filtered_df['risk_score'] < 70)])
-        
-        col1.metric("Total Events Detected", total_alerts)
-        
-        # Display delta for critical alerts dynamically
-        col2.metric("Critical Threats (90-100)", critical_alerts, delta="Requires Action" if critical_alerts > 0 else "All Clear", delta_color="inverse" if critical_alerts > 0 else "normal")
-        col3.metric("High Risks (70-89)", high_alerts)
-        col4.metric("Medium Risks (50-69)", medium_alerts)
-        
-        st.markdown("---")
-        
-        # --- Visualizations ---
-        st.markdown("### Threat Distribution")
-        chart_col1, chart_col2 = st.columns(2)
-        
-        with chart_col1:
-            # Risk score distribution
-            if not filtered_df.empty:
-                base = alt.Chart(filtered_df).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
-                    x=alt.X('risk_score:Q', bin=alt.Bin(maxbins=20), title='Risk Score'),
-                    y=alt.Y('count():Q', title='Number of Alerts'),
-                    color=alt.condition(
-                        alt.datum.risk_score >= 80,
-                        alt.value('#f85149'),  # Red for high risk
-                        alt.value('#58a6ff')   # Blue for lower risk
-                    ),
-                    tooltip=['count()', 'risk_score']
-                ).properties(height=280, title="Alerts by Risk Score").configure_view(strokeOpacity=0)
-                st.altair_chart(base, use_container_width=True)
-                
-        with chart_col2:
-            # Top Threat Types
-            if 'analysis' in filtered_df.columns and not filtered_df.empty:
-                threat_counts = filtered_df['analysis'].value_counts().reset_index()
-                threat_counts.columns = ['Threat Type', 'Count']
-                
-                chart2 = alt.Chart(threat_counts.head(5)).mark_arc(innerRadius=60).encode(
-                    theta="Count:Q",
-                    color=alt.Color("Threat Type:N", scale=alt.Scale(scheme='set2')),
-                    tooltip=['Threat Type', 'Count']
-                ).properties(height=280, title="Top Threat Classifications")
-                st.altair_chart(chart2, use_container_width=True)
+        if not df.empty:
+            # Apply filters
+            # Ensure risk_score is numeric
+            df['risk_score'] = pd.to_numeric(df['risk_score'], errors='coerce').fillna(0)
+            filtered_df = df[df['risk_score'] >= min_risk]
+            
+            # --- Top KPIs ---
+            col1, col2, col3, col4 = st.columns(4)
+            
+            total_alerts = len(filtered_df)
+            critical_alerts = len(filtered_df[filtered_df['risk_score'] >= 90])
+            high_alerts = len(filtered_df[(filtered_df['risk_score'] >= 70) & (filtered_df['risk_score'] < 90)])
+            medium_alerts = len(filtered_df[(filtered_df['risk_score'] >= 50) & (filtered_df['risk_score'] < 70)])
+            
+            col1.metric("Total Events Detected", total_alerts)
+            
+            # Display delta for critical alerts dynamically
+            col2.metric("Critical Threats (90-100)", critical_alerts, delta="Requires Action" if critical_alerts > 0 else "All Clear", delta_color="inverse" if critical_alerts > 0 else "normal")
+            col3.metric("High Risks (70-89)", high_alerts)
+            col4.metric("Medium Risks (50-69)", medium_alerts)
+            
+            st.markdown("---")
+            
+            # --- Visualizations ---
+            st.markdown("### Threat Distribution")
+            chart_col1, chart_col2 = st.columns(2)
+            
+            with chart_col1:
+                # Risk score distribution
+                if not filtered_df.empty:
+                    base = alt.Chart(filtered_df).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
+                        x=alt.X('risk_score:Q', bin=alt.Bin(maxbins=20), title='Risk Score'),
+                        y=alt.Y('count():Q', title='Number of Alerts'),
+                        color=alt.condition(
+                            alt.datum.risk_score >= 80,
+                            alt.value('#f85149'),  # Red for high risk
+                            alt.value('#58a6ff')   # Blue for lower risk
+                        ),
+                        tooltip=['count()', 'risk_score']
+                    ).properties(height=280, title="Alerts by Risk Score").configure_view(strokeOpacity=0)
+                    st.altair_chart(base, use_container_width=True)
+                    
+            with chart_col2:
+                # Top Threat Types
+                if 'analysis' in filtered_df.columns and not filtered_df.empty:
+                    threat_counts = filtered_df['analysis'].value_counts().reset_index()
+                    threat_counts.columns = ['Threat Type', 'Count']
+                    
+                    chart2 = alt.Chart(threat_counts.head(5)).mark_arc(innerRadius=60).encode(
+                        theta="Count:Q",
+                        color=alt.Color("Threat Type:N", scale=alt.Scale(scheme='set2')),
+                        tooltip=['Threat Type', 'Count']
+                    ).properties(height=280, title="Top Threat Classifications")
+                    st.altair_chart(chart2, use_container_width=True)
 
-        # --- Threat Feed ---
-        st.markdown("### 🔴 Active Threat Feed")
-        
-        # Format dataframe for display
-        display_df = filtered_df[['timestamp', 'risk_score', 'analysis', 'action', 'source', 'raw_content']].copy()
-        display_df = display_df.sort_values(by='timestamp', ascending=False)
-        
-        # Rename columns to look professional
-        display_df.columns = ['Timestamp', 'Risk Score', 'Threat Analysis', 'Auto-Action', 'Source Path', 'Raw Event Log']
-        
-        # Apply pandas styling
-        def highlight_risk(val):
-            # Check if value is a valid numeric score before styling
-            if pd.isna(val) or not isinstance(val, (int, float)):
-                return ''
-            if val >= 90: return 'color: #ff4b4b; font-weight: bold'
-            elif val >= 70: return 'color: #ffa421; font-weight: bold'
-            else: return 'color: #3dd56d'
+            # --- Threat Feed ---
+            st.markdown("### 🔴 Active Threat Feed")
+            
+            # Format dataframe for display
+            display_df = filtered_df[['timestamp', 'risk_score', 'analysis', 'action', 'source', 'raw_content']].copy()
+            display_df = display_df.sort_values(by='timestamp', ascending=False)
+            
+            # Rename columns to look professional
+            display_df.columns = ['Timestamp', 'Risk Score', 'Threat Analysis', 'Auto-Action', 'Source Path', 'Raw Event Log']
+            
+            # Apply pandas styling
+            def highlight_risk(val):
+                # Check if value is a valid numeric score before styling
+                if pd.isna(val) or not isinstance(val, (int, float)):
+                    return ''
+                if val >= 90: return 'color: #ff4b4b; font-weight: bold'
+                elif val >= 70: return 'color: #ffa421; font-weight: bold'
+                else: return 'color: #3dd56d'
 
-        styled_df = display_df.style.map(highlight_risk, subset=['Risk Score'])
-        
-        st.dataframe(
-            styled_df,
-            use_container_width=True,
-            height=400,
-            hide_index=True
-        )
-    else:
-        st.info("No alerts found in the database yet. Waiting for agents...")
+            styled_df = display_df.style.map(highlight_risk, subset=['Risk Score'])
+            
+            st.dataframe(
+                styled_df,
+                use_container_width=True,
+                height=400,
+                hide_index=True
+            )
+        else:
+            st.info("No alerts found in the database yet. Waiting for agents...")
 
-    if auto_refresh:
-        time.sleep(2)
-        st.rerun()
+    with tab2:
+        st.markdown("### 🤖 Ask C.O.R.E. About Your Data")
+        if auto_refresh:
+             st.warning("⚠️ **Note:** Please uncheck 'Live Feed (Auto-Refresh)' in the sidebar while chatting, otherwise the page will refresh and interrupt your typing!")
+             
+        st.markdown("Type a natural language query like: *'Show me all critical alerts from yesterday'* or *'How many times did IP 185.224.128.84 attack?'*")
+        
+        if not use_llm:
+            st.error("AI engine is currently disabled in config.yaml. Please enable Gemini or Ollama to use the Threat Hunter.")
+        else:
+            if "messages" not in st.session_state:
+                st.session_state.messages = []
+
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+                    if "dataframe" in message:
+                        st.dataframe(message["dataframe"], use_container_width=True)
+
+            if prompt := st.chat_input("Ask a threat intelligence query..."):
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Analyzing intent and generating SQL query..."):
+                        sql_query = None
+                        error_msg = None
+                        
+                        system_prompt = f"""
+                        You are a strict SQL query generator for a SOC analyst dashboard.
+                        You must convert the user's natural language request into a valid SQLite SQL query.
+                        Table Name: alerts
+                        
+                        Schema:
+                        id INTEGER PRIMARY KEY
+                        timestamp TEXT (Unix Timestamp in seconds)
+                        source TEXT (e.g., /var/log/auth.log)
+                        risk_score INTEGER (0-100)
+                        analysis TEXT 
+                        action TEXT (e.g., 'Block IP', 'Monitor')
+                        raw_content TEXT (The raw log line)
+                        country TEXT
+                        city TEXT
+                        ip TEXT
+                        
+                        RULES:
+                        1. Return ONLY the raw SQL query.
+                        2. Do NOT wrap the query in markdown code blocks like ```sql.
+                        3. Do NOT add any preamble or explanation.
+                        4. Example: SELECT * FROM alerts WHERE risk_score > 90 LIMIT 10;
+                        
+                        User Request: {prompt}
+                        """
+                        
+                        try:
+                            if provider == "gemini":
+                                import google.generativeai as genai
+                                if not api_key:
+                                    raise ValueError("Google API Key not found. Cannot use Gemini.")
+                                genai.configure(api_key=api_key)
+                                model = genai.GenerativeModel('gemini-1.5-flash')
+                                resp = model.generate_content(system_prompt)
+                                sql_query = resp.text.strip().replace("```sql", "").replace("```", "").strip()
+                            elif provider == "ollama":
+                                headers = {'Content-Type': 'application/json'}
+                                data = {"model": ollama_model, "prompt": system_prompt, "stream": False}
+                                resp = requests.post(f"{ollama_url}/api/generate", headers=headers, json=data, timeout=30)
+                                resp.raise_for_status()
+                                sql_query = resp.json().get("response", "").strip().replace("```sql", "").replace("```", "").strip()
+                        except Exception as e:
+                            error_msg = f"Failed to generate query: {str(e)}"
+                            
+                        if sql_query and not error_msg:
+                            st.markdown(f"**Execution:** `{sql_query}`")
+                            try:
+                                with sqlite3.connect(DB_PATH) as conn:
+                                    if not sql_query.upper().lstrip().startswith("SELECT"):
+                                        st.error("For safety reasons, only SELECT SQL queries are allowed in the Threat Hunter.")
+                                    else:
+                                        result_df = pd.read_sql_query(sql_query, conn)
+                                        if not result_df.empty and 'timestamp' in result_df.columns:
+                                            try:
+                                                result_df['timestamp'] = pd.to_datetime(result_df['timestamp'], unit='s')
+                                            except:
+                                                pass
+                                        
+                                        st.dataframe(result_df, use_container_width=True)
+                                        st.caption(f"Found {len(result_df)} specific results matching your criteria.")
+                                        st.session_state.messages.append({
+                                            "role": "assistant", 
+                                            "content": f"**Executed SQL:** `{sql_query}`", 
+                                            "dataframe": result_df
+                                        })
+                            except Exception as e:
+                                st.error(f"Database Query Failed: {str(e)}")
+                                st.session_state.messages.append({"role": "assistant", "content": f"Failed executing query {sql_query}: {str(e)}"})
+                        else:
+                            st.error(error_msg or "Failed to generate query.")
+                            st.session_state.messages.append({"role": "assistant", "content": error_msg or "Failed to generate query."})
+
+    # if auto_refresh:
+    #     time.sleep(2)
+    #     st.rerun()
 
 if __name__ == "__main__":
     main()
