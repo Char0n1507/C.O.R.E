@@ -497,7 +497,8 @@ def main():
             table = f_df[['timestamp', 'ip', 'risk_score', 'analysis', 'action', 'source']].copy()
             st.dataframe(table.sort_values('timestamp', ascending=False), use_container_width=True, height=500, hide_index=True)
 
-    if run_stream:
+    # Only auto-refresh on passive monitoring tabs to prevent user input interruption
+    if run_stream and selected_tab not in ["NEURAL QUERY", "REPORTING"]:
         time.sleep(5)
         st.rerun()
 
