@@ -379,13 +379,17 @@ def main():
                         counts = m_df['mitre_tactic'].value_counts().reset_index()
                         counts.columns = ['Tactic', 'Count']
                         chart = alt.Chart(counts).mark_bar(color='#58a6ff', cornerRadiusEnd=4, size=24).encode(
-                            x=alt.X('Count:Q', title=None, axis=alt.Axis(grid=False, labelFlush=False)),
+                            x=alt.X('Count:Q', title=None, axis=alt.Axis(grid=False, labelFlush=False, tickCount=5)),
                             y=alt.Y('Tactic:N', sort='-x', title=None),
                             tooltip=['Tactic', 'Count']
                         ).properties(height=300).configure_view(strokeWidth=0).configure_axis(
                             labelColor='#8b949e', titleColor='#8b949e', labelFontSize=11, labelFontWeight=600
                         )
                         st.altair_chart(chart, use_container_width=True)
+                    else:
+                        st.markdown("<div style='height:300px; display:flex; align-items:center; justify-content:center; color:#8b949e; font-size:0.85rem;'>Awaiting MITRE ATT&CK structured telemetry (Currently categorizing anomalous traffic as 'Unknown').</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<div style='height:300px; display:flex; align-items:center; justify-content:center; color:#8b949e; font-size:0.85rem;'>MITRE telemetry stream unavailable.</div>", unsafe_allow_html=True)
 
         with c_right:
             with st.container(border=True):
@@ -404,7 +408,7 @@ def main():
             tactics = ['Initial Access', 'Execution', 'Persistence', 'Privilege Escalation', 'Defense Evasion', 'Credential Access', 'Discovery', 'Lateral Movement', 'Collection', 'Command and Control', 'Exfiltration', 'Impact']
             matrix_data = []
             for t in tactics:
-                count = len(df[df['mitre_tactic'] == t])
+                count = len(df[df['mitre_tactic'] == t]) if 'mitre_tactic' in df.columns else 0
                 matrix_data.append({'Tactic': t, 'Count': count})
             
             m_df = pd.DataFrame(matrix_data)
