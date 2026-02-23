@@ -24,3 +24,4 @@ imapclient
 mail-parser
 schedule
 fpdf2
+pg8000

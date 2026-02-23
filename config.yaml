@@ -17,4 +17,19 @@ sources:
     server: imap.example.com
     username: security@example.com
   logs:
-  - test_log.txt
+    - test_log.txt
+  webhook_port: 8080
+
+remote_response:
+  enabled: true
+  wazuh:
+    enabled: true
+    url: "https://wazuh.enterprise.local:55000"
+    api_key: "PASTE_WAZUH_API_KEY_HERE"
+    dry_run: true
+
+deception:
+  enabled: true
+  scramble_interval: 3600 # Change lures every hour
+  alert_on_touch: true
+

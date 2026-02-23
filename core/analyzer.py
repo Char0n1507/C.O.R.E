@@ -85,7 +85,8 @@ class Analyzer:
         suspicious_keywords = [
             "failed", "error", "denied", "segfault", "panic", "root", "admin",
             "unauthorized", "refused", "attack", "malware", "virus", "trojan",
-            "tripwire", "honeypot"
+            "tripwire", "honeypot", "shell", "bash", "exec", "nc", "python",
+            "injection", "union", "select", "script", "exploit", "cve"
         ]
         
         is_suspicious = any(kw in content for kw in suspicious_keywords)

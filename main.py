@@ -1,15 +1,18 @@
 import asyncio
 import os
-import signal
-import sys
 import yaml
-from dotenv import load_dotenv
+import time
+from datetime import datetime
+from core.ingestor import LogMonitor
 from core.ingestor_enterprise import EnterpriseKafkaMonitor
 from core.email_monitor import EmailMonitor
 from core.analyzer import Analyzer
 from core.database_enterprise import EnterpriseDatabase
 from modules.response.firewall import Firewall
+from modules.response.remote_response import RemoteResponder
+from core.ingestor_webhook import WebhookIngestor
 from core.reporter import generate_daily_report
+from modules.deception.honeypot import CyberDeception
 import schedule
 
 class Colors:
@@ -23,172 +26,127 @@ class Colors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-# Load env vars
-load_dotenv()
-
-# Load configuration
-try:
-    with open("config.yaml", "r") as f:
-        config = yaml.safe_load(f)
-except FileNotFoundError:
-    print("[!] config.yaml not found! Using default variables.")
-    config = {
-        "agent": {"name": "C.O.R.E."},
-        "sources": {"logs": ["test_log.txt"]},
-        "response": {"dry_run": True, "block_threshold": 90},
-        "analyzer": {"use_llm": False}
-    }
-
-LOG_PATHS = config.get("sources", {}).get("logs", ["test_log.txt"])
-
-async def main():
-    agent_name = config.get("agent", {}).get("name", "C.O.R.E.")
-    print(rf"""{Colors.OKCYAN}{Colors.BOLD}
+def print_banner():
+    banner = f"""{Colors.OKCYAN}
    ____   ___  ____  _____ 
   / ___| / _ \|  _ \| ____|
  | |    | | | | |_) |  _|  
  | |___ | |_| |  _ <| |___ 
-  \____| \___/|_| \_\_____|
+  \\____| \\___/|_| \\_\\_____|
                            
-  AI SOC AGENT: {agent_name}
-  {Colors.ENDC}{Colors.OKBLUE}------------------------------------------------{Colors.ENDC}
-    """)
-    print(f"{Colors.OKCYAN}[*] Initializing Core Modules...{Colors.ENDC}")
+  AI SOC AGENT: C.O.R.E. v2.0
+  ------------------------------------------------{Colors.ENDC}"""
+    print(banner)
+
+async def main():
+    print_banner()
+    
+    # Load Config
+    try:
+        with open("config.yaml", "r") as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        print(f"{Colors.FAIL}[!] Critical Error: Could not load config.yaml ({e}){Colors.ENDC}")
+        return
+
+    print(f"[*] Initializing Command Center...")
     
     # 0. Database
     db = EnterpriseDatabase()
-    print(f"{Colors.OKGREEN}[+] Connected to Enterprise PostgreSQL Database (soc_alerts){Colors.ENDC}")
+    print(f"{Colors.OKGREEN}[+] Infrastructure: PostgreSQL Active{Colors.ENDC}")
     
-    # 0a. Active Response
+    # 0a. Response
     dry_run_mode = config.get("response", {}).get("dry_run", True)
     firewall = Firewall(dry_run=dry_run_mode)
-    print(f"{Colors.OKGREEN}[+] Active Response Module Initialized (Mode: {'DRY RUN' if dry_run_mode else 'LIVE'}){Colors.ENDC}")
-    
-    # 1. Processing Queue (Logs -> Q -> Analyzer)
+    remote_responder = RemoteResponder(config)
+    print(f"{Colors.OKGREEN}[+] Defense: {'Local & Remote (Simulated)' if dry_run_mode else 'LIVE ACTIVE RESPONSE'}{Colors.ENDC}")
+
+    # 1. Processing Queue
     log_queue = asyncio.Queue()
-    loop = asyncio.get_running_loop()
+    loop = asyncio.get_event_loop()
+
+    # 2. Start Ingestors
+    # Kafka
+    kafka_server = "localhost:9092"
+    kafka_monitor = EnterpriseKafkaMonitor(kafka_server, ["enterprise-logs"], log_queue, loop)
+    kafka_monitor.start()
     
-    # 2. Start Log Monitor (Producer)
-    monitor = EnterpriseKafkaMonitor("localhost:9092", ["enterprise-logs", "auth-logs"], log_queue, loop)
-    monitor.start()
-    
-    # 2a. Start Email Monitor (Producer)
+    # Local File Monitor
+    log_paths = config.get("sources", {}).get("logs", [])
+    if log_paths:
+        file_monitor = LogMonitor(log_paths, log_queue, loop)
+        file_monitor.start()
+
+    # Webhook
+    webhook_port = config.get("sources", {}).get("webhook_port", 8080)
+    webhook_ingestor = WebhookIngestor(port=webhook_port, processing_queue=log_queue, loop=loop)
+    webhook_ingestor.start()
+
+    # Email
     email_config = config.get("sources", {}).get("email", {})
     email_monitor = EmailMonitor(email_config, log_queue, loop)
-    email_task = asyncio.create_task(email_monitor.run())
+    asyncio.create_task(email_monitor.run())
+
+    # 2a. Deception Engine
+    deception_engine = CyberDeception(config, log_queue, loop)
+    deception_engine.start()
+    print(f"{Colors.OKGREEN}[+] Infrastructure: Cyber Deception Engine Active (Ghost Nodes Deployed){Colors.ENDC}")
+
+    # 3. Intelligence Selection
+    print(f"\n{Colors.BOLD}Select Intelligence Engine:{Colors.ENDC}")
+    provider = config.get('analyzer', {}).get('provider', 'rules')
+    use_llm = config.get('analyzer', {}).get('use_llm', False)
     
-    # 3. Start Analyzer (Consumer)
-    # 3. Start Analyzer (Consumer)
-    # Interactive AI Selection
-    print(f"\n{Colors.OKCYAN}{Colors.BOLD}Select Intelligence Engine:{Colors.ENDC}")
-    print(f"  {Colors.OKGREEN}[1]{Colors.ENDC} Google Gemini Pro (Cloud)")
-    print(f"  {Colors.OKGREEN}[2]{Colors.ENDC} Local Ollama (Offline)")
-    print(f"  {Colors.OKGREEN}[3]{Colors.ENDC} Rules-Based Engine Only")
+    print(f"  [1] Google Gemini Pro (Cloud)")
+    print(f"  [2] Local Ollama (Offline)")
+    print(f"  [3] Rules-Based Engine Only")
     
-    # Check for existing config or use default to avoid blocking in non-interactive shells
-    default_choice = "3"
-    if config.get("analyzer", {}).get("use_llm"):
-        default_choice = "1" if config["analyzer"].get("provider") == "gemini" else "2"
+    # Use config as default
+    engine_display = {
+        "gemini": "Google Gemini Pro",
+        "ollama": "Local Ollama",
+        "rules": "Standard Rules"
+    }
+    print(f"➔ Intelligence Engine: {Colors.OKCYAN}{engine_display.get(provider, 'Standard Rules')}{Colors.ENDC}")
     
-    print(f"\n{Colors.OKCYAN}➔ Choose [1-3] (Default {default_choice}): {Colors.ENDC}", end="", flush=True)
+    analyzer = Analyzer(config)
     
-    # Non-blocking input or use default if it fails (e.g. no TTY)
-    try:
-        import select
-        if select.select([sys.stdin], [], [], 10)[0]:
-            choice = sys.stdin.readline().strip()
-        else:
-            print(f"\n[!] Timeout: Using default choice ({default_choice})")
-            choice = default_choice
-    except:
-        choice = default_choice
-    
-    if not choice:
-        choice = default_choice
-    
-    if choice == '1':
-        use_llm_mode = True
-        llm_provider = "gemini"
-    elif choice == '2':
-        use_llm_mode = True
-        llm_provider = "ollama"
-    else:
-        use_llm_mode = False
-        llm_provider = "none"
-        
-    # Override config with user choice
-    config["analyzer"]["use_llm"] = use_llm_mode
-    config["analyzer"]["provider"] = llm_provider
-    try:
-        with open("config.yaml", "w") as f:
-            yaml.dump(config, f, default_flow_style=False)
-    except Exception as e:
-        print(f"[!] Warning: Failed to save config.yaml: {e}")
-    ollama_url = config.get("analyzer", {}).get("ollama_url", "http://localhost:11434")
-    ollama_model = config.get("analyzer", {}).get("ollama_model", "llama3")
-    
-    analyzer = Analyzer(
-        use_llm=use_llm_mode,
-        provider=llm_provider,
-        ollama_url=ollama_url,
-        ollama_model=ollama_model
-    )
-    
-    print(f"{Colors.HEADER}{Colors.BOLD}=================================================================={Colors.ENDC}")
-    print(f"{Colors.OKGREEN}[✓] C.O.R.E. is now monitoring logs for threats. Press Ctrl+C to stop.{Colors.ENDC}")
-    print(f"{Colors.HEADER}{Colors.BOLD}=================================================================={Colors.ENDC}")
-    
-    
-    # Schedule Daily PDF Reporting
-    print(f"{Colors.OKGREEN}[+] Automated Reporting engine loaded. PDF reports scheduled.{Colors.ENDC}")
-    schedule.every().day.at("00:00").do(generate_daily_report)
-    
-    # Also generate an initial report to demonstrate the feature immediately
-    generate_daily_report()
-    
-    async def schedule_loop():
-        while True:
-            schedule.run_pending()
-            await asyncio.sleep(60)
+    print(f"\n{Colors.OKBLUE}=================================================================={Colors.ENDC}")
+    print(f"{Colors.BOLD}[✓] C.O.R.E. IS ONLINE & MONITORING TRAFFIC{Colors.ENDC}")
+    print(f"{Colors.OKBLUE}=================================================================={Colors.ENDC}\n")
+
+    # 4. Main Loop
+    while True:
+        log_entry = await log_queue.get()
+        if log_entry:
+            result = await analyzer.analyze_log(log_entry)
             
-    asyncio.create_task(schedule_loop())
-    
-    try:
-        while True:
-            # Consume new logs
-            log_event = await log_queue.get()
-            
-            # Analyze using AI/Rules
-            result = await analyzer.analyze_log(log_event)
-            
-            # Print alerts for high risk events
-            if result['risk_score'] > 50:
-                print(f"\n{Colors.FAIL}{Colors.BOLD}[🚨 THREAT DETECTED - RISK {result['risk_score']}]{Colors.ENDC} {Colors.WARNING}{result.get('analysis', 'Unknown Threat')}{Colors.ENDC}")
-                if 'action' in result:
-                    print(f"    {Colors.OKCYAN}➔ [ACTION]   :{Colors.ENDC} {result['action']}")
-                print(f"    {Colors.OKBLUE}➔ [SOURCE]   :{Colors.ENDC} {result['source']}")
-                print(f"    {Colors.OKBLUE}➔ [RAW LOG]  :{Colors.ENDC} {result['raw_content']}")
+            # Simplified & Action-Oriented Terminal Interface
+            risk = result.get('risk_score', 0)
+            if risk >= 50:
+                color = Colors.FAIL if risk >= 90 else Colors.WARNING
+                timestamp = datetime.now().strftime("%H:%M:%S")
                 
-                # Active Response Logic
+                print(f"{color}[{timestamp}] 🚨 THREAT DETECTED (Risk: {risk}/100){Colors.ENDC}")
+                print(f"    🔎 Analysis : {result['analysis']}")
+                print(f"    📦 Source   : {result['source']}")
+                
+                # Active Actions
                 threshold = config.get("response", {}).get("block_threshold", 90)
-                if result['risk_score'] >= threshold:
+                if risk >= threshold:
                     ip = firewall.extract_ip(result['raw_content'])
                     if ip:
+                        print(f"    🛡️  Defense  : Automatically blocking {ip}...")
                         firewall.block_ip(ip, reason=result['analysis'])
-                
-                # Save to DB
-                db.save_alert(result)
-            
-            # Mark task as done
-            log_queue.task_done()
-            
-    except asyncio.CancelledError:
-        print("[!] Stopping...")
-    finally:
-        monitor.stop()
+                        await remote_responder.execute_action("REMOTELY_BLOCK_IP", ip, reason=result['analysis'])
+                print("") # Spacer
+
+            # Persistence
+            db.save_alert(result)
+        log_queue.task_done()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        sys.exit(0)
+        print(f"\n{Colors.WARNING}[!] SOC Shutting down...{Colors.ENDC}")

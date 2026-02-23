@@ -33,12 +33,12 @@ class GeoEnricher:
             # Convert 2-letter country code to 3-letter for Plotly maps
             try:
                 country_obj = pycountry.countries.get(alpha_2=country_code)
-                alpha_3 = country_obj.alpha_3 if country_obj else "USA"
+                alpha_3 = country_obj.alpha_3 if country_obj else ""
             except:
-                alpha_3 = "USA"
+                alpha_3 = ""
 
             data = {
-                "country": country_name,
+                "country": country_name if country_name != "Unknown" else "Internal/Local",
                 "city": city,
                 "lat": lat,
                 "lon": lon,
@@ -48,7 +48,6 @@ class GeoEnricher:
             return data
             
         except Exception as e:
-            # Fallback to unknown if API fails or IP is private network
-            logging.debug(f"GeoIP Lookup failed for {ip_address}: {e}")
-            self.cache[ip_address] = {"country": "Unknown", "city": "Unknown", "lat": 0.0, "lon": 0.0, "alpha_3": "USA"}
+            # Fallback for internal/private IPs or API failures
+            self.cache[ip_address] = {"country": "Internal/Private", "city": "N/A", "lat": 0.0, "lon": 0.0, "alpha_3": ""}
             return self.cache[ip_address]
