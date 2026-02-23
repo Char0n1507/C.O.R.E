@@ -25,7 +25,7 @@ class Analyzer:
             if self.provider == "gemini" and self.api_key:
                 print("[*] Configuring Gemini Pro for Analysis...")
                 genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
             elif self.provider == "ollama":
                 print(f"[*] Configuring Local Ollama LLM ({self.ollama_model}) at {self.ollama_url}...")
             else:
@@ -59,8 +59,14 @@ class Analyzer:
             "lat": loc["lat"],
             "lon": loc["lon"],
             "alpha_3": loc["alpha_3"],
-            "ip": ip
+            "ip": ip,
+            "mitre_tactic": "Unknown",
+            "mitre_technique": "Unknown"
         }
+        
+        # Check if this is an email
+        if log_entry.get("type") == "email":
+            return await self._analyze_email(log_entry, base_result)
 
         # 0. VirusTotal Threat Intel (Fastest, High-Confidence)
         vt_data = self.vt.check_ip(ip) if ip else None
@@ -69,7 +75,9 @@ class Analyzer:
             result.update({
                 "risk_score": 100,
                 "analysis": vt_data["summary"],
-                "action": "Block IP (VirusTotal Intel)"
+                "action": "Block IP (VirusTotal Intel)",
+                "mitre_tactic": "Command and Control",
+                "mitre_technique": "T1071 - Application Layer Protocol"
             })
             return result
 
@@ -100,7 +108,9 @@ class Analyzer:
                 result.update({
                     "risk_score": response.get("risk_score", 50),
                     "analysis": response.get("summary", "AI Analysis Failed"),
-                    "action": response.get("action", "Monitor")
+                    "action": response.get("action", "Monitor"),
+                    "mitre_tactic": response.get("mitre_tactic", "Unknown"),
+                    "mitre_technique": response.get("mitre_technique", "Unknown")
                 })
                 return result
             except Exception as e:
@@ -114,7 +124,9 @@ class Analyzer:
             result.update({
                 "risk_score": ueba_result["risk_score"],
                 "analysis": ueba_result["analysis"],
-                "action": ueba_result["action"]
+                "action": ueba_result["action"],
+                "mitre_tactic": ueba_result.get("mitre_tactic", "Unknown"),
+                "mitre_technique": ueba_result.get("mitre_technique", "Unknown")
             })
             return result
 
@@ -134,10 +146,26 @@ class Analyzer:
             analysis = "Privileged Access Attempt"
 
         result = base_result.copy()
+        
+        # Rule Based Mitre Tactic Mapping
+        mitre_tactic = "Unknown"
+        mitre_technique = "Unknown"
+        if "Honeypot" in analysis:
+            mitre_tactic = "Defense Evasion"
+            mitre_technique = "T1562 - Impair Defenses"
+        elif "Privileged" in analysis:
+            mitre_tactic = "Privilege Escalation"
+            mitre_technique = "T1078 - Valid Accounts"
+        elif "Login" in analysis or "Brute" in analysis:
+            mitre_tactic = "Credential Access"
+            mitre_technique = "T1110 - Brute Force"
+            
         result.update({
             "risk_score": risk_score,
             "analysis": analysis,
-            "action": "Monitor"
+            "action": "Monitor",
+            "mitre_tactic": mitre_tactic,
+            "mitre_technique": mitre_technique
         })
         return result
 
@@ -153,6 +181,8 @@ class Analyzer:
         - risk_score (integer 0-100)
         - summary (short explanation of the event)
         - action (recommended action like 'Block IP', 'Isolate Host', 'Identify User', 'Ignore')
+        - mitre_tactic (e.g., 'Initial Access', 'Execution', 'Credential Access', or 'Unknown')
+        - mitre_technique (e.g., 'T1110 - Brute Force', 'T1078 - Valid Accounts', or 'Unknown')
         
         Do not include markdown formatting or extra text. Just the JSON.
         """
@@ -182,4 +212,93 @@ class Analyzer:
             return json.loads(text)
         except Exception as e:
             print(f"[!] LLM Analysis Error: {e}")
+            return {"risk_score": 50, "summary": "AI Parsing Error", "action": "Manual Review"}
+
+    async def _analyze_email(self, log_entry, base_result):
+        """Analyzes an email event, checking URLs in VirusTotal and using the LLM for social engineering detection."""
+        email_data = log_entry.get("email_data", {})
+        body = email_data.get("body", "")
+        
+        # 1. Extract URLs from body
+        urls = re.findall(r'(https?://[^\s]+)', body)
+        for url in urls:
+            vt_data = self.vt.check_url(url)
+            if vt_data and vt_data.get("is_malicious"):
+                result = base_result.copy()
+                result.update({
+                    "risk_score": 100,
+                    "analysis": f"Malicious URL detected in email: {url} ({vt_data['summary']})",
+                    "action": "Quarantine Email & Block Sender",
+                    "mitre_tactic": "Initial Access",
+                    "mitre_technique": "T1566 - Phishing"
+                })
+                return result
+                
+        # 2. Deep Analysis (Gemini / Ollama)
+        if self.use_llm:
+            try:
+                response = await asyncio.to_thread(self._query_llm_email, log_entry['content'])
+                result = base_result.copy()
+                result.update({
+                    "risk_score": response.get("risk_score", 50),
+                    "analysis": response.get("summary", "AI Analysis Failed"),
+                    "action": response.get("action", "Monitor"),
+                    "mitre_tactic": response.get("mitre_tactic", "Unknown"),
+                    "mitre_technique": response.get("mitre_technique", "Unknown")
+                })
+                return result
+            except Exception as e:
+                print(f"[!] Gemini Email Analysis Error: {e}")
+                
+        # Fallback
+        result = base_result.copy()
+        result.update({
+            "risk_score": 30,
+            "analysis": "Email Processed (No Deep AI config or errors occurred)",
+            "action": "Monitor"
+        })
+        return result
+
+    def _query_llm_email(self, email_content):
+        """Queries the LLM to inspect an email for phishing / social engineering."""
+        prompt = f"""
+        You are an expert Security Operations Center (SOC) Analyst.
+        Analyze the following parsed email entry for phishing, social engineering, or malware threats.
+        
+        Email: "{email_content}"
+        
+        Format your response as a valid JSON object with these keys:
+        - risk_score (integer 0-100, where 90+ is definite phishing/malicious)
+        - summary (short explanation of the threat or confirming it is safe)
+        - action (recommended action like 'Quarantine Email', 'Delete', 'Safe')
+        - mitre_tactic (Output 'Initial Access' if malicious, or 'Unknown' otherwise)
+        - mitre_technique (Output 'T1566 - Phishing' if malicious, or 'Unknown' otherwise)
+        
+        Do not include markdown formatting or extra text. Just the JSON.
+        """
+        try:
+            if self.provider == "gemini":
+                response = self.model.generate_content(prompt)
+                text = response.text.strip()
+            elif self.provider == "ollama":
+                headers = {'Content-Type': 'application/json'}
+                data = {
+                    "model": self.ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json"
+                }
+                resp = requests.post(f"{self.ollama_url}/api/generate", headers=headers, json=data, timeout=30)
+                resp.raise_for_status()
+                text = resp.json().get("response", "").strip()
+            else:
+                raise ValueError("Unknown LLM Provider configured.")
+
+            if text.startswith("```json"):
+                text = text[7:-3]
+            elif text.startswith("```"):
+                text = text[3:-3]
+            return json.loads(text)
+        except Exception as e:
+            print(f"[!] LLM Email Analysis Error: {e}")
             return {"risk_score": 50, "summary": "AI Parsing Error", "action": "Manual Review"}

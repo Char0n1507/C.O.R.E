@@ -142,7 +142,7 @@ def main():
     except:
         pass
 
-    tab1, tab2 = st.tabs(["📊 Live Events", "💬 AI Threat Hunter"])
+    tab1, tab2, tab3 = st.tabs(["📊 Live Events", "💬 AI Threat Hunter", "🗺️ Threat Landscape"])
     
     with tab1:
         df = load_data()
@@ -232,6 +232,56 @@ def main():
         else:
             st.info("No alerts found in the database yet. Waiting for agents...")
 
+    with tab3:
+        st.markdown("### 🗺️ MITRE ATT&CK Kill-Chain Analysis")
+        st.markdown("Enterprise view of active threats mapped to MITRE tactics and techniques.")
+        
+        df = load_data()
+        if not df.empty and 'mitre_tactic' in df.columns:
+            # Filter unknowns for a cleaner MITRE view
+            mitre_df = df[(df['mitre_tactic'] != 'Unknown') & (df['mitre_tactic'].notna())]
+            
+            if not mitre_df.empty:
+                col_m1, col_m2 = st.columns(2)
+                
+                with col_m1:
+                    tactic_counts = mitre_df['mitre_tactic'].value_counts().reset_index()
+                    tactic_counts.columns = ['Tactic', 'Alert Count']
+                    
+                    chart_tactic = alt.Chart(tactic_counts).mark_bar(cornerRadiusEnd=4).encode(
+                        x=alt.X('Alert Count:Q'),
+                        y=alt.Y('Tactic:N', sort='-x'),
+                        color=alt.Color('Tactic:N', legend=None, scale=alt.Scale(scheme='tableau10')),
+                        tooltip=['Tactic', 'Alert Count']
+                    ).properties(height=350, title="Top Active Tactics in Kill-Chain")
+                    
+                    st.altair_chart(chart_tactic, use_container_width=True)
+                    
+                with col_m2:
+                    tech_counts = mitre_df['mitre_technique'].value_counts().reset_index()
+                    tech_counts.columns = ['Technique', 'Alert Count']
+                    
+                    chart_tech = alt.Chart(tech_counts.head(10)).mark_arc(innerRadius=50).encode(
+                        theta="Alert Count:Q",
+                        color=alt.Color("Technique:N", scale=alt.Scale(scheme='category20b')),
+                        tooltip=['Technique', 'Alert Count']
+                    ).properties(height=350, title="Top Threat Techniques Detected")
+                    
+                    st.altair_chart(chart_tech, use_container_width=True)
+                    
+                st.markdown("### 🔴 MITRE Threat Feed")
+                mitre_display = mitre_df[['timestamp', 'mitre_tactic', 'mitre_technique', 'risk_score', 'analysis']].copy()
+                mitre_display = mitre_display.sort_values(by='timestamp', ascending=False)
+                
+                def highlight_tactic(val):
+                    return 'background-color: #3d1414;' if val != 'Unknown' else ''
+                    
+                st.dataframe(mitre_display.style.map(highlight_tactic, subset=['mitre_tactic']), use_container_width=True, hide_index=True)
+            else:
+                st.info("No active MITRE mappings detected yet. Wait for a recognizable threat.")
+        else:
+            st.info("Waiting for MITRE-enriched data from the C.O.R.E. Engine...")
+
     with tab2:
         st.markdown("### 🤖 Ask C.O.R.E. About Your Data")
         if auto_refresh:
@@ -277,6 +327,8 @@ def main():
                         country TEXT
                         city TEXT
                         ip TEXT
+                        mitre_tactic TEXT
+                        mitre_technique TEXT
                         
                         RULES:
                         1. Return ONLY the raw SQL query.

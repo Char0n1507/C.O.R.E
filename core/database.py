@@ -26,6 +26,8 @@ class Database:
                     lon REAL,
                     alpha_3 TEXT,
                     ip TEXT,
+                    mitre_tactic TEXT,
+                    mitre_technique TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -36,8 +38,8 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO alerts (timestamp, source, risk_score, analysis, action, raw_content, country, city, lat, lon, alpha_3, ip)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO alerts (timestamp, source, risk_score, analysis, action, raw_content, country, city, lat, lon, alpha_3, ip, mitre_tactic, mitre_technique)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 alert_data.get('timestamp'),
                 alert_data.get('source'),
@@ -50,7 +52,9 @@ class Database:
                 alert_data.get('lat'),
                 alert_data.get('lon'),
                 alert_data.get('alpha_3'),
-                alert_data.get('ip')
+                alert_data.get('ip'),
+                alert_data.get('mitre_tactic', 'Unknown'),
+                alert_data.get('mitre_technique', 'Unknown')
             ))
             conn.commit()
             return cursor.lastrowid

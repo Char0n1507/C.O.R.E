@@ -44,7 +44,9 @@ class BehaviorAnalyzer:
             return {
                 "risk_score": 95,
                 "analysis": "UEBA: Contextual Brute Force Detected (>5 failures in 60s)",
-                "action": "Block IP Automatically"
+                "action": "Block IP Automatically",
+                "mitre_tactic": "Credential Access",
+                "mitre_technique": "T1110 - Brute Force"
             }
 
         return None
