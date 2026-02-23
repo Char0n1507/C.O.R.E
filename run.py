@@ -52,34 +52,45 @@ def main():
             print(f"  {Colors.OKGREEN}[+]{Colors.ENDC} {Colors.BOLD}{name:<25}{Colors.ENDC} - {desc}")
         print("\n")
 
-        # Prompt for enterprise mode feature
-        enable_rt = input(f"{Colors.BOLD}{Colors.WARNING}[?] Do you want to enable the Autonomous Red Team Adversary? (y/N): {Colors.ENDC}").strip().lower()
-        if enable_rt in ['y', 'yes', 'true']:
-            run_adversary = True
-            print(f"{Colors.OKCYAN}[*] Red Team Agent Scheduled for Deployment.{Colors.ENDC}\n")
-        else:
-            run_adversary = False
-            print(f"[*] Red Team Agent \033[91mDeactivated\033[0m. Operating in standard defense mode.\n")
+        # Interactive Deployment Menu
+        print(f"{Colors.BOLD}{Colors.WARNING}Select Deployment Mode:{Colors.ENDC}")
+        print("  [1] 🚀 Launch Full Ecosystem (Core AI + Dashboard)")
+        print("  [2] ⚔️  Launch WarGames Mode (Full Ecosystem + Red Team Adversary)")
+        print("  [3] 🧠 Launch Core AI Engine Only (Headless Backend)")
+        print("  [4] 📊 Launch Mission Control Dashboard Only (UI)")
+        print("  [5] ❌ Exit\n")
+        
+        choice = input(f"{Colors.BOLD}Enter your choice (1-5): {Colors.ENDC}").strip()
+        
+        if choice == '5':
+            print("Exiting.")
+            sys.exit(0)
+            
+        run_engine = choice in ['1', '2', '3']
+        run_dashboard = choice in ['1', '2', '4']
+        run_adversary = choice == '2'
 
-        # 1. Launch Core Engine
-        print(f"{Colors.OKGREEN}[+] Starting Core Command Center (main.py)...{Colors.ENDC}")
-        p_main = subprocess.Popen([python_exe, main_script])
-        processes.append(p_main)
-        time.sleep(3) # Give it time to initialize DB and queues
+        if run_engine:
+            # 1. Launch Core Engine
+            print(f"{Colors.OKGREEN}[+] Starting Core Command Center (main.py)...{Colors.ENDC}")
+            p_main = subprocess.Popen([python_exe, main_script])
+            processes.append(p_main)
+            time.sleep(3) # Give it time to initialize DB and queues
         
-        # 2. Launch Streamlit Dashboard
-        print(f"{Colors.OKGREEN}[+] Starting Mission Control (dashboard.py)...{Colors.ENDC}")
-        # Use python -m streamlit to ensure it uses the venv streamlit
-        p_dash = subprocess.Popen(
-            [python_exe, "-m", "streamlit", "run", dashboard_script, "--server.port", "8501", "--server.address", "0.0.0.0"],
-            stdout=subprocess.DEVNULL, # Hide verbose streamlit startup logs to keep console clean
-            stderr=subprocess.DEVNULL
-        )
-        processes.append(p_dash)
-        time.sleep(2)
+        if run_dashboard:
+            # 2. Launch Streamlit Dashboard
+            print(f"{Colors.OKGREEN}[+] Starting Mission Control (dashboard.py)...{Colors.ENDC}")
+            # Use python -m streamlit to ensure it uses the venv streamlit
+            p_dash = subprocess.Popen(
+                [python_exe, "-m", "streamlit", "run", dashboard_script, "--server.port", "8501", "--server.address", "0.0.0.0"],
+                stdout=subprocess.DEVNULL, # Hide verbose streamlit startup logs to keep console clean
+                stderr=subprocess.DEVNULL
+            )
+            processes.append(p_dash)
+            time.sleep(2)
         
-        # 3. Launch Red Team Adversary (Conditional)
         if run_adversary:
+            # 3. Launch Red Team Adversary
             print(f"{Colors.OKGREEN}[+] Starting Autonomous Red Team Agent (adversary.py)...{Colors.ENDC}")
             p_agent = subprocess.Popen([python_exe, adversary_script])
             processes.append(p_agent)
