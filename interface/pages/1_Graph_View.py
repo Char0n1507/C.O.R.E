@@ -151,29 +151,31 @@ if not df.empty:
                     G.add_edge(country, ip, color="#30363d", width=1)
 
             # 3. Alert Vector (The specialized label)
-            alert_label = f"EV_{i}"
-            G.add_node(alert_label, label=alert[:25]+"..." if len(alert) > 25 else alert, 
-                       title=f"Analysis: {alert}\nScore: {risk}%", 
-                       color=PALETTE["BASE"]["bg"], shape="box", 
-                       font={"size": 10, "face": "JetBrains Mono", "color": "#f0f6fc"},
-                       borderWidth=1, margin=5)
-            
-            G.add_edge(ip, alert_label, color="#484f58", width=1)
-            
-            # Link to MITRE Tactic
-            if tactic not in nodes_added:
-                G.add_node(tactic, label=tactic.upper(), title="MITRE ATT&CK Tactic", 
-                           color=PALETTE["TACTIC"]["bg"], shape="triangle", size=15)
-                nodes_added[tactic] = True
-            G.add_edge(alert_label, tactic, color="#30363d", width=1, dash=True)
-
-            # 4. Target User
-            if user:
-                if user not in nodes_added:
-                    G.add_node(user, label=f"@{user}", title=f"Account: {user}", 
-                               color=PALETTE["TARGET"]["bg"], shape="dot", size=10)
-                    nodes_added[user] = True
-                G.add_edge(alert_label, user, color="#30363d", width=1, dash=True)
+            alert_id = f"alert_{ip}_{hash(alert)}"
+            if alert_id not in nodes_added:
+                G.add_node(alert_id, label=alert[:25]+"..." if len(alert) > 25 else alert, 
+                           title=f"Analysis: {alert}\nScore: {risk}%", 
+                           color=PALETTE["BASE"]["bg"], shape="box", 
+                           font={"size": 10, "face": "JetBrains Mono", "color": "#f0f6fc"},
+                           borderWidth=1, margin=5)
+                nodes_added[alert_id] = True
+                
+                G.add_edge(ip, alert_id, color="#484f58", width=1)
+                
+                # Link to MITRE Tactic
+                if tactic not in nodes_added:
+                    G.add_node(tactic, label=tactic.upper(), title="MITRE ATT&CK Tactic", 
+                               color=PALETTE["TACTIC"]["bg"], shape="triangle", size=15)
+                    nodes_added[tactic] = True
+                G.add_edge(alert_id, tactic, color="#30363d", width=1, dash=True)
+    
+                # 4. Target User
+                if user:
+                    if user not in nodes_added:
+                        G.add_node(user, label=f"@{user}", title=f"Account: {user}", 
+                                   color=PALETTE["TARGET"]["bg"], shape="dot", size=10)
+                        nodes_added[user] = True
+                    G.add_edge(alert_id, user, color="#30363d", width=1, dash=True)
 
             # 5. Active Block Status
             if "Block" in action:
@@ -189,14 +191,15 @@ if not df.empty:
     # Precise Physics Options for Large Data Clusters
     options = {
         "physics": {
-            "forceAtlas2Based": {
-                "gravitationalConstant": -50,
-                "centralGravity": 0.005,
-                "springLength": 100,
-                "springConstant": 0.08,
-                "avoidOverlap": 1
+            "barnesHut": {
+                "gravitationalConstant": -2000,
+                "centralGravity": 0.1,
+                "springLength": 150,
+                "springConstant": 0.04,
+                "damping": 0.09,
+                "avoidOverlap": 0.1
             },
-            "solver": "forceAtlas2Based",
+            "solver": "barnesHut",
             "stabilization": {"iterations": 200, "updateInterval": 50}
         },
         "edges": {
