@@ -19,6 +19,7 @@ sources:
   logs:
     - test_log.txt
   webhook_port: 8080
+  wifi_interface: "wlan0"
 
 remote_response:
   enabled: true

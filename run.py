@@ -43,6 +43,7 @@ def main():
             ("🧠 AI Analyst Engine", "Ingests and analyzes logs/telemetry dynamically via LLMs (Gemini/Ollama)"),
             ("🛡️ Autonomous Response", "Automatically drops IP packets using iptables or remote Wazuh APIs"),
             ("🕸️ Cyber Deception", "Spins up Honeypots (Ghost Nodes) that trap internal network scanners"),
+            ("📡 Raw Packet Sniffing", "Intercepts and analyzes live TCP/UDP frames directly off the bare-metal Network Interface"),
             ("📊 Mission Control UI", "A unified dashboard (Streamlit) for real-time visualization and neural queries"),
             ("📄 Executive Reporting", "Generates PDF Board-Level Briefs mapping threats to MITRE ATT&CK"),
             ("🕵️‍♂️ Red Team Adversary", "An optional autonomous agent that tests defenses using 0-day techniques"),

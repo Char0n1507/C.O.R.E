@@ -13,6 +13,7 @@ from modules.response.remote_response import RemoteResponder
 from core.ingestor_webhook import WebhookIngestor
 from core.reporter import generate_daily_report
 from modules.deception.honeypot import CyberDeception
+from core.ingestor_wifi import NetworkPacketMonitor
 import schedule
 
 class Colors:
@@ -86,6 +87,12 @@ async def main():
     email_config = config.get("sources", {}).get("email", {})
     email_monitor = EmailMonitor(email_config, log_queue, loop)
     asyncio.create_task(email_monitor.run())
+
+    # Wi-Fi Packet Sniffer
+    wifi_interface = config.get("sources", {}).get("wifi_interface", "lo")
+    if wifi_interface:
+        wifi_monitor = NetworkPacketMonitor(interface=wifi_interface, processing_queue=log_queue, loop=loop)
+        wifi_monitor.start()
 
     # 2a. Deception Engine
     deception_engine = CyberDeception(config, log_queue, loop)
