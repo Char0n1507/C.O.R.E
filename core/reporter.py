@@ -36,8 +36,11 @@ def generate_daily_report():
         total_alerts = len(df)
         
         # ensure risk_score is numeric
-        df['risk_score'] = pd.to_numeric(df['risk_score'], errors='coerce').fillna(0)
-        critical = len(df[df['risk_score'] >= 90]) if not df.empty else 0
+        if not df.empty and 'risk_score' in df.columns:
+            df['risk_score'] = pd.to_numeric(df['risk_score'], errors='coerce').fillna(0)
+            critical = len(df[df['risk_score'] >= 90])
+        else:
+            critical = 0
         
         # Tactics
         if not df.empty and 'mitre_tactic' in df.columns:

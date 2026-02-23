@@ -25,3 +25,5 @@ mail-parser
 schedule
 fpdf2
 pg8000
+httpx
+kafka-python
