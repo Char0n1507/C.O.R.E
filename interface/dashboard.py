@@ -156,12 +156,18 @@ def main():
             # --- Top KPIs ---
             col1, col2, col3, col4 = st.columns(4)
             
-            total_alerts = len(filtered_df)
+            # Fetch real total count bypassing the 500 limit display query
+            try:
+                with sqlite3.connect(DB_PATH) as _conn:
+                    real_total = pd.read_sql_query("SELECT COUNT(*) as c FROM alerts", _conn).iloc[0]['c']
+            except:
+                real_total = len(filtered_df)
+                
             critical_alerts = len(filtered_df[filtered_df['risk_score'] >= 90])
             high_alerts = len(filtered_df[(filtered_df['risk_score'] >= 70) & (filtered_df['risk_score'] < 90)])
             medium_alerts = len(filtered_df[(filtered_df['risk_score'] >= 50) & (filtered_df['risk_score'] < 70)])
             
-            col1.metric("Total Events Detected", total_alerts)
+            col1.metric("Total Events Detected", int(real_total))
             
             # Display delta for critical alerts dynamically
             col2.metric("Critical Threats (90-100)", critical_alerts, delta="Requires Action" if critical_alerts > 0 else "All Clear", delta_color="inverse" if critical_alerts > 0 else "normal")
