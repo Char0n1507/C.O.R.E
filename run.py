@@ -37,6 +37,21 @@ def main():
     adversary_script = os.path.join("modules", "agents", "adversary.py")
 
     try:
+        # Display Feature Set
+        print(f"{Colors.BOLD}{Colors.OKCYAN}C.O.R.E. Ecosystem Architecture & Capabilities:{Colors.ENDC}")
+        features = [
+            ("🧠 AI Analyst Engine", "Ingests and analyzes logs/telemetry dynamically via LLMs (Gemini/Ollama)"),
+            ("🛡️ Autonomous Response", "Automatically drops IP packets using iptables or remote Wazuh APIs"),
+            ("🕸️ Cyber Deception", "Spins up Honeypots (Ghost Nodes) that trap internal network scanners"),
+            ("📊 Mission Control UI", "A unified dashboard (Streamlit) for real-time visualization and neural queries"),
+            ("📄 Executive Reporting", "Generates PDF Board-Level Briefs mapping threats to MITRE ATT&CK"),
+            ("🕵️‍♂️ Red Team Adversary", "An optional autonomous agent that tests defenses using 0-day techniques"),
+        ]
+        
+        for name, desc in features:
+            print(f"  {Colors.OKGREEN}[+]{Colors.ENDC} {Colors.BOLD}{name:<25}{Colors.ENDC} - {desc}")
+        print("\n")
+
         # Prompt for enterprise mode feature
         enable_rt = input(f"{Colors.BOLD}{Colors.WARNING}[?] Do you want to enable the Autonomous Red Team Adversary? (y/N): {Colors.ENDC}").strip().lower()
         if enable_rt in ['y', 'yes', 'true']:
