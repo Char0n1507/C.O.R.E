@@ -65,32 +65,23 @@ Feel free to edit `config.yaml` to specify which log files to monitor and config
 
 ### 3. Run the complete SOC Environment!
 
-You will need to open **3 separate terminal windows** (ensure your `venv` is activated in all of them!).
+### 3. Run the complete SOC Environment!
 
-**Terminal 1: Start the Core Agent**
+We have consolidated the entire ecosystem into a single master launcher. You no longer need to open 3 separate terminals. Simply activate your virtual environment and run:
+
 ```bash
 source venv/bin/activate
-python main.py
+python run.py
 ```
 
-**Terminal 2: Start the Streamlit Dashboard UI**
-```bash
-source venv/bin/activate
-streamlit run interface/dashboard.py
-```
-*Note: Navigate to `http://localhost:8501`. The default operator password is **`admin`**.*
+This single command will automatically initialize and orchestrate:
+1. **The Core Agent Backend (`main.py`)** natively assigning risk scores.
+2. **The Streamlit Dashboard (`dashboard.py`)** hosted locally on `http://localhost:8501`.
+3. **The Autonomous Red Team Agent (`adversary.py`)** which will dynamically attack the dashboard.
 
-**Terminal 3: Start the Threat Simulator & Honeypot**
-*(This will generate fake malicious log entries so you can see the dashboard in action!)*
-```bash
-source venv/bin/activate
+*(To shut down the entire ecosystem safely, simply press Ctrl+C in that same terminal.)*
 
-# Start the Honeypot (runs a fake FTP server on port 2121)
-python modules/deception/honeypot.py &
-
-# Run the Threat Simulator
-python simulator.py
-```
+*Note: The default operator password for the dashboard is **`admin`**.*
 
 ## 🛠️ Tech Stack
 *   **Backend Engine**: Python (AsyncIO)
