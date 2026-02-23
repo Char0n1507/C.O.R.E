@@ -37,6 +37,15 @@ def main():
     adversary_script = os.path.join("modules", "agents", "adversary.py")
 
     try:
+        # Prompt for enterprise mode feature
+        enable_rt = input(f"{Colors.BOLD}{Colors.WARNING}[?] Do you want to enable the Autonomous Red Team Adversary? (y/N): {Colors.ENDC}").strip().lower()
+        if enable_rt in ['y', 'yes', 'true']:
+            run_adversary = True
+            print(f"{Colors.OKCYAN}[*] Red Team Agent Scheduled for Deployment.{Colors.ENDC}\n")
+        else:
+            run_adversary = False
+            print(f"[*] Red Team Agent \033[91mDeactivated\033[0m. Operating in standard defense mode.\n")
+
         # 1. Launch Core Engine
         print(f"{Colors.OKGREEN}[+] Starting Core Command Center (main.py)...{Colors.ENDC}")
         p_main = subprocess.Popen([python_exe, main_script])
@@ -54,10 +63,11 @@ def main():
         processes.append(p_dash)
         time.sleep(2)
         
-        # 3. Launch Red Team Adversary
-        print(f"{Colors.OKGREEN}[+] Starting Autonomous Red Team Agent (adversary.py)...{Colors.ENDC}")
-        p_agent = subprocess.Popen([python_exe, adversary_script])
-        processes.append(p_agent)
+        # 3. Launch Red Team Adversary (Conditional)
+        if run_adversary:
+            print(f"{Colors.OKGREEN}[+] Starting Autonomous Red Team Agent (adversary.py)...{Colors.ENDC}")
+            p_agent = subprocess.Popen([python_exe, adversary_script])
+            processes.append(p_agent)
         
         print(f"\n{Colors.BOLD}{Colors.OKCYAN}[✓] ALL SYSTEMS GREEN. Ecosystem is running.{Colors.ENDC}")
         print(f"    - Dashboard URL: http://localhost:8501")
