@@ -20,3 +20,7 @@ streamlit
 altair
 google-generativeai
 pyyaml
+imapclient
+mail-parser
+schedule
+fpdf2

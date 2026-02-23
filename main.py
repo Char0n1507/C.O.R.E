@@ -5,9 +5,12 @@ import sys
 import yaml
 from dotenv import load_dotenv
 from core.ingestor import LogMonitor
+from core.email_monitor import EmailMonitor
 from core.analyzer import Analyzer
 from core.database import Database
 from modules.response.firewall import Firewall
+from core.reporter import generate_daily_report
+import schedule
 
 class Colors:
     HEADER = '\033[95m'
@@ -40,7 +43,7 @@ LOG_PATHS = config.get("sources", {}).get("logs", ["test_log.txt"])
 
 async def main():
     agent_name = config.get("agent", {}).get("name", "C.O.R.E.")
-    print(f"""{Colors.OKCYAN}{Colors.BOLD}
+    print(rf"""{Colors.OKCYAN}{Colors.BOLD}
    ____   ___  ____  _____ 
   / ___| / _ \|  _ \| ____|
  | |    | | | | |_) |  _|  
@@ -69,6 +72,11 @@ async def main():
     monitor = LogMonitor(LOG_PATHS, log_queue, loop)
     monitor.start()
     
+    # 2a. Start Email Monitor (Producer)
+    email_config = config.get("sources", {}).get("email", {})
+    email_monitor = EmailMonitor(email_config, log_queue, loop)
+    email_task = asyncio.create_task(email_monitor.run())
+    
     # 3. Start Analyzer (Consumer)
     # 3. Start Analyzer (Consumer)
     # Interactive AI Selection
@@ -77,7 +85,26 @@ async def main():
     print(f"  {Colors.OKGREEN}[2]{Colors.ENDC} Local Ollama (Offline)")
     print(f"  {Colors.OKGREEN}[3]{Colors.ENDC} Rules-Based Engine Only")
     
-    choice = input(f"\n{Colors.OKCYAN}➔ Choose [1-3]: {Colors.ENDC}").strip()
+    # Check for existing config or use default to avoid blocking in non-interactive shells
+    default_choice = "3"
+    if config.get("analyzer", {}).get("use_llm"):
+        default_choice = "1" if config["analyzer"].get("provider") == "gemini" else "2"
+    
+    print(f"\n{Colors.OKCYAN}➔ Choose [1-3] (Default {default_choice}): {Colors.ENDC}", end="", flush=True)
+    
+    # Non-blocking input or use default if it fails (e.g. no TTY)
+    try:
+        import select
+        if select.select([sys.stdin], [], [], 10)[0]:
+            choice = sys.stdin.readline().strip()
+        else:
+            print(f"\n[!] Timeout: Using default choice ({default_choice})")
+            choice = default_choice
+    except:
+        choice = default_choice
+    
+    if not choice:
+        choice = default_choice
     
     if choice == '1':
         use_llm_mode = True
@@ -110,6 +137,21 @@ async def main():
     print(f"{Colors.HEADER}{Colors.BOLD}=================================================================={Colors.ENDC}")
     print(f"{Colors.OKGREEN}[✓] C.O.R.E. is now monitoring logs for threats. Press Ctrl+C to stop.{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}=================================================================={Colors.ENDC}")
+    
+    
+    # Schedule Daily PDF Reporting
+    print(f"{Colors.OKGREEN}[+] Automated Reporting engine loaded. PDF reports scheduled.{Colors.ENDC}")
+    schedule.every().day.at("00:00").do(generate_daily_report)
+    
+    # Also generate an initial report to demonstrate the feature immediately
+    generate_daily_report()
+    
+    async def schedule_loop():
+        while True:
+            schedule.run_pending()
+            await asyncio.sleep(60)
+            
+    asyncio.create_task(schedule_loop())
     
     try:
         while True:
@@ -147,7 +189,6 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
+        asyncio.run(main())
     except KeyboardInterrupt:
         sys.exit(0)
