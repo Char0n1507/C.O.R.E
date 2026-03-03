@@ -129,9 +129,9 @@ The automated 3D Choropleth map spins and plots the aggregate geographic origins
 
 ### Proof of Concept (POC)
 
-1. Run `python simulator.py`. It generates logs referencing known public botnets (e.g., `185.224.128.84`).
-2. Run `python main.py`. C.O.R.E. intercepts the log.
-3. The Regex parser extracts the IP. Before doing anything else, C.O.R.E. fires a request to the **VirusTotal API**.
+1. Launch the agent in WARGAMES mode by running `python CORE.py` and activating the attack simulation. The built-in `threat_sim.py` red-team orchestrator generates and fires live telemetry representing known public botnets (e.g., `185.224.128.84`).
+2. The core AI Engine natively intercepts the log stream.
+3. The Regex parser extracts the IP. Before doing anything else, C.O.R.E. optionally fires a request to the **VirusTotal API**.
 4. VirusTotal confirms `185.224.128.84` is malicious.
 5. C.O.R.E. intercepts the natural UEBA analysis, automatically boosts the Risk Score to `100`, writes a `[CRITICAL_THREAT]` tag, and uses `os.system` to inject an `iptables DROP` rule stopping the connection at the kernel level.
-6. The entire sequence finishes in `< 1500 ms` and effortlessly broadcasts across the UI!
+6. The entire sequence finishes in milliseconds and cleanly orchestrates the blocks and Ghost Node data straight up into the Streamlit UI!
