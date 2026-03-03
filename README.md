@@ -14,10 +14,9 @@ This project is a fully-functional, AI-driven Security Operations Center (SOC) a
 3. **Global Threat Intelligence (VirusTotal)**: Automatically extracts attacking IP addresses and cross-references them with the massive live global VirusTotal database. If an IP is flagged as malicious by multiple security vendors worldwide, C.O.R.E instantly pegs the Risk Score at `100` and drops the connection before the attack can even start!
 4. **Deception Technology (Active Honeypot)**: Runs a fake FTP server to instantly single out network scanners and attackers with zero false positives.
 5. **Autonomous Response**: Integrates directly with Linux `iptables` to actively drop network connections of high-risk IP addresses the moment an attack is confirmed.
-6. **Interactive Dashboard & SOAR**: 
-    - **Live Feed**: A dark-mode, glowing Streamlit dashboard featuring live KPI metrics.
-    - **Kill Chain Graph**: A NetworkX/PyVis interactive drag-and-drop web mapping Attacker IPs ➔ Targeted Users ➔ Triggered ALerts.
-    - **Geo-IP Threat Map**: Automatically looks up attacking IP origins and plots them on a global Choropleth map using Plotly.
+6. **Sentinel Elite Dashboard & Mission Control**: 
+    - **Live Feed**: A dark-mode, glowing Streamlit dashboard featuring live KPI metrics and an active Threat Ticker.
+    - **Integrated Threat Matrix**: Automatically looks up attacking IP origins and plots them on an interactive, 3D Geographic Threat Matrix modal directly inside the main unified dashboard.
 
 ---
 
@@ -65,29 +64,27 @@ Feel free to edit `config.yaml` to specify which log files to monitor and config
 
 ### 3. Run the complete SOC Environment!
 
-### 3. Run the complete SOC Environment!
+### 3. Run the complete SOC Environment (Sentinel Elite)
 
-We have consolidated the entire ecosystem into a single master launcher. You no longer need to open 3 separate terminals. First, ensure the Enterprise Database cluster (PostgreSQL + Kafka) is running, then activate your virtual environment and run the agent:
+We have consolidated the entire ecosystem into a single master launcher (`CORE.py`). Support for an Enterprise backend (PostgreSQL and Kafka) has been added to handle heavy, realistic loads. First, ensure the Enterprise Database cluster is running, then activate your virtual environment and launch the agent:
 
 ```bash
-# Bring up the Enterprise Database and Messaging Queue
+# Bring up the Enterprise Database and Messaging Queue (Kafka & Postgres)
 docker compose up -d
 
 # Activate virtual environment
 source venv/bin/activate
 
-# Launch the Master Agent Console
+# Launch the Master Agent Console (Supports interactive mode or 'WARGAMES' mode)
 python CORE.py
 ```
 
 This single command will automatically initialize and orchestrate:
-1. **The Core Agent Backend (`main.py`)** natively assigning risk scores.
-2. **The Streamlit Dashboard (`dashboard.py`)** hosted locally on `http://localhost:8501`.
-3. **The Autonomous Red Team Agent (`adversary.py`)** which will dynamically attack the dashboard.
+1. **The Core Agent Backend (`CORE.py`)** assigning risk scores via local modules or deep AI.
+2. **The Streamlit Dashboard (`interface/dashboard.py`)** hosted locally on `http://localhost:8501`.
+3. **The Autonomous Red Team Agent (`core/threat_sim.py`)** which will dynamically attack the dashboard if run in WARGAMES mode.
 
-*(To shut down the entire ecosystem safely, simply press Ctrl+C in that same terminal.)*
-
-*Note: The default operator password for the dashboard is **`admin`**.*
+*(To shut down the entire ecosystem safely, simply press Ctrl+C in that same terminal and type `stop` or `exit` in the interactive console.)*
 
 ## 🛠️ Tech Stack
 *   **Backend Engine**: Python (AsyncIO)
@@ -114,23 +111,19 @@ If you don't know much about coding or networking, don't worry! Here is a simple
 
 ## 📸 Screenshots & Proof of Concept (POC)
 
-Here is a visual showcase of the C.O.R.E. AI SOC Agent in action on a live instance:
+Here is a visual showcase of the upgraded C.O.R.E. AI SOC Agent (Sentinel Elite Edition) in action on a live instance:
 
-### 1. The Main Dashboard (Dark Mode & Glowing KPIs)
-The dynamic dashboard updates live in real-time as the agent actively drops malicious IP connections. Note the local **Ollama AI Analyst** explicitly mapped and tracking events locally.
-![Main Dashboard](assets/dashboard.png)
+### 1. Mission Control Dashboard (Upper View)
+The dynamic dashboard updates live in real-time as the agent actively ingests and processes threats. Note the DEFCON status, active tracking of Mitre ATT&CK Kill Chain phases, and live telemetry feeds.
+![Mission Control Upper View](assets/mission_control.png)
 
-### 2. Threat Knowledge Graph (Kill Chain View)
-An interactive drag-and-drop web showing exactly how internal users, external IPs, and active honeypot traps relate to one another during a complex multi-stage attack.
-![Threat Knowledge Graph](assets/graph.png)
+### 2. Strategic Risk & Action Centers (Lower View)
+The bottom half of the dashboard controls tactical engagements. It includes live feeds from Ghost Node deception tripwires and automates generation of Executive PDF summary reports.
+![Mission Control Bottom View](assets/mission_control_bottom.png)
 
-### 3. Global Threat Monitor (Geo-IP Map)
-The automated Choropleth map tracks the geographic origin of Cyberattacks in real-time.
-![Geo Map](assets/map.png)
-
-### 4. Direct Terminal Interface (Agent Operations)
-The glowing interface of the backend Python engine natively assigning risk scores and executing blocking routines instantly.
-![Terminal View](assets/terminal.png)
+### 3. Integrated 3D Geospatial Threat Matrix
+The automated 3D Choropleth map spins and plots the aggregate geographic origins of Cyberattacks in real-time directly over the interface in a sleek modal overlay.
+![Geospatial Matrix](assets/geospatial_matrix.png)
 
 ---
 
