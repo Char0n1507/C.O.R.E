@@ -135,3 +135,15 @@ The automated 3D Choropleth map spins and plots the aggregate geographic origins
 4. VirusTotal confirms `185.224.128.84` is malicious.
 5. C.O.R.E. intercepts the natural UEBA analysis, automatically boosts the Risk Score to `100`, writes a `[CRITICAL_THREAT]` tag, and uses `os.system` to inject an `iptables DROP` rule stopping the connection at the kernel level.
 6. The entire sequence finishes in milliseconds and cleanly orchestrates the blocks and Ghost Node data straight up into the Streamlit UI!
+
+---
+
+## 🎥 Video Demonstration
+
+Want to see C.O.R.E. Sentinel Elite in action? Check out this full functionality demo of the active dashboard under heavy load:
+
+<video src="assets/demo_recording.mp4" controls width="100%">
+  Your browser does not support the video tag.
+</video>
+
+*(If the video doesn't play natively on GitHub, you can download `assets/demo_recording.mp4` directly to view it).*
