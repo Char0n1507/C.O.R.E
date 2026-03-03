@@ -1,10 +1,8 @@
 agent:
-  log_level: INFO
-  name: C.O.R.E.
-analyzer:
+  name: C.O.R.E
   ollama_model: llama3
   ollama_url: http://localhost:11434
-  provider: ollama
+  provider: gemini
   use_llm: true
 response:
   block_threshold: 90
@@ -18,7 +16,7 @@ sources:
     username: security@example.com
   logs:
     - test_log.txt
-  webhook_port: 8080
+  webhook_port: 8081
   wifi_interface: "wlan0"
 
 remote_response:
@@ -34,3 +32,8 @@ deception:
   scramble_interval: 3600 # Change lures every hour
   alert_on_touch: true
 
+
+simulation:
+  enabled: true
+  file_interval: 5
+  kafka_interval: 10

@@ -1,14 +1,22 @@
 import pg8000.native
 from datetime import datetime
 
+
 class EnterpriseDatabase:
-    def __init__(self, host="localhost", port=5433, dbname="soc_alerts", user="soc_admin", password="super_secret_password"):
+    def __init__(
+        self,
+        host="localhost",
+        port=5433,
+        dbname="soc_alerts",
+        user="soc_admin",
+        password="super_secret_password",
+    ):
         self.conn_params = {
             "host": host,
             "port": port,
             "database": dbname,
             "user": user,
-            "password": password
+            "password": password,
         }
         self.init_db()
 
@@ -17,8 +25,14 @@ class EnterpriseDatabase:
 
     def init_db(self):
         """Create tables if they don't exist in PostgreSQL."""
-        conn = self._get_conn()
-        conn.run('''
+        try:
+            conn = self._get_conn()
+        except Exception as e:
+            print("\n\033[91m[!] CRITICAL ERROR: Could not connect to the Enterprise Database.\033[0m")
+            print("\033[93m[!] Please ensure you have run 'docker compose up -d' before starting C.O.R.E.\033[0m")
+            import sys
+            sys.exit(1)
+        conn.run("""
             CREATE TABLE IF NOT EXISTS alerts (
                 id SERIAL PRIMARY KEY,
                 timestamp TEXT,
@@ -37,31 +51,32 @@ class EnterpriseDatabase:
                 mitre_technique TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
+        """)
         conn.close()
 
     def save_alert(self, alert_data):
         """Saves an alert dictionary to the PostgreSQL database."""
         conn = self._get_conn()
-        res = conn.run('''
+        res = conn.run(
+            """
             INSERT INTO alerts (timestamp, source, risk_score, analysis, action, raw_content, country, city, lat, lon, alpha_3, ip, mitre_tactic, mitre_technique)
             VALUES (:timestamp, :source, :risk_score, :analysis, :action, :raw_content, :country, :city, :lat, :lon, :alpha_3, :ip, :mitre_tactic, :mitre_technique)
             RETURNING id
-        ''', 
-            timestamp=alert_data.get('timestamp'),
-            source=alert_data.get('source'),
-            risk_score=alert_data.get('risk_score'),
-            analysis=alert_data.get('analysis'),
-            action=alert_data.get('action', 'Monitor'),
-            raw_content=alert_data.get('raw_content'),
-            country=alert_data.get('country'),
-            city=alert_data.get('city'),
-            lat=alert_data.get('lat'),
-            lon=alert_data.get('lon'),
-            alpha_3=alert_data.get('alpha_3'),
-            ip=alert_data.get('ip'),
-            mitre_tactic=alert_data.get('mitre_tactic', 'Unknown'),
-            mitre_technique=alert_data.get('mitre_technique', 'Unknown')
+        """,
+            timestamp=alert_data.get("timestamp"),
+            source=alert_data.get("source"),
+            risk_score=alert_data.get("risk_score"),
+            analysis=alert_data.get("analysis"),
+            action=alert_data.get("action", "Monitor"),
+            raw_content=alert_data.get("raw_content"),
+            country=alert_data.get("country"),
+            city=alert_data.get("city"),
+            lat=alert_data.get("lat"),
+            lon=alert_data.get("lon"),
+            alpha_3=alert_data.get("alpha_3"),
+            ip=alert_data.get("ip"),
+            mitre_tactic=alert_data.get("mitre_tactic", "Unknown"),
+            mitre_technique=alert_data.get("mitre_technique", "Unknown"),
         )
         conn.close()
         return res[0][0]
@@ -70,8 +85,10 @@ class EnterpriseDatabase:
         """Fetch recent alerts for the dashboard."""
         conn = self._get_conn()
         # pg8000 native run returns a list of lists, and .columns provides column names
-        rows = conn.run('SELECT * FROM alerts ORDER BY id DESC LIMIT :limit', limit=limit)
-        columns = [col['name'] for col in conn.columns]
+        rows = conn.run(
+            "SELECT * FROM alerts ORDER BY id DESC LIMIT :limit", limit=limit
+        )
+        columns = [col["name"] for col in conn.columns]
         results = [dict(zip(columns, row)) for row in rows]
         conn.close()
         return results
@@ -79,7 +96,14 @@ class EnterpriseDatabase:
     def get_stats(self):
         """Get high-level stats."""
         conn = self._get_conn()
-        total = conn.run('SELECT COUNT(*) FROM alerts')[0][0]
-        critical = conn.run('SELECT COUNT(*) FROM alerts WHERE risk_score > 80')[0][0]
+        total = conn.run("SELECT COUNT(*) FROM alerts")[0][0]
+        critical = conn.run("SELECT COUNT(*) FROM alerts WHERE risk_score > 80")[0][0]
         conn.close()
         return {"total": total, "critical": critical}
+
+    def clear_all_alerts(self):
+        """Wipes all alert data (used for daily dashboard refresh)."""
+        conn = self._get_conn()
+        conn.run("DELETE FROM alerts")
+        conn.close()
+        return True

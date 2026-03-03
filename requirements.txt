@@ -27,3 +27,7 @@ fpdf2
 pg8000
 httpx
 kafka-python
+pcapy-ng
+scapy
+msal
+PyJWT

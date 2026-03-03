@@ -10,3 +10,4 @@ test_emails.jsonl
 test_log.txt
 *.log
 *.html
+linkedin_assets/

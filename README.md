@@ -67,11 +67,17 @@ Feel free to edit `config.yaml` to specify which log files to monitor and config
 
 ### 3. Run the complete SOC Environment!
 
-We have consolidated the entire ecosystem into a single master launcher. You no longer need to open 3 separate terminals. Simply activate your virtual environment and run:
+We have consolidated the entire ecosystem into a single master launcher. You no longer need to open 3 separate terminals. First, ensure the Enterprise Database cluster (PostgreSQL + Kafka) is running, then activate your virtual environment and run the agent:
 
 ```bash
+# Bring up the Enterprise Database and Messaging Queue
+docker compose up -d
+
+# Activate virtual environment
 source venv/bin/activate
-python run.py
+
+# Launch the Master Agent Console
+python CORE.py
 ```
 
 This single command will automatically initialize and orchestrate:

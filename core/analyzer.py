@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import time
 import requests
 import google.generativeai as genai
 from google.api_core import exceptions
@@ -9,25 +10,56 @@ from modules.enrichment.geo import GeoEnricher
 from modules.enrichment.virustotal import VirusTotalEnricher
 import re
 
+
+class Colors:
+    OKGREEN = "\033[92m"
+    OKBLUE = "\033[94m"
+    ENDC = "\033[0m"
+
+
 class Analyzer:
-    def __init__(self, use_llm=True, provider="gemini", ollama_url="http://localhost:11434", ollama_model="llama3"):
-        self.use_llm = use_llm
-        self.provider = provider
-        self.ollama_url = ollama_url
-        self.ollama_model = ollama_model
+    def __init__(
+        self,
+        use_llm=True,
+        provider="gemini",
+        ollama_url="http://localhost:11434",
+        ollama_model="llama3",
+    ):
+        # Handle case where a config dictionary is passed directly
+        if isinstance(use_llm, dict):
+            config = use_llm
+            ana_cfg = config.get("analyzer", {})
+            self.use_llm = ana_cfg.get("use_llm", True)
+            self.provider = ana_cfg.get("provider", "gemini")
+            self.ollama_url = ana_cfg.get("ollama_url", "http://localhost:11434")
+            self.ollama_model = ana_cfg.get("ollama_model", "llama3")
+        else:
+            self.use_llm = use_llm
+            self.provider = provider
+            self.ollama_url = ollama_url
+            self.ollama_model = ollama_model
+
         self.api_key = os.getenv("GOOGLE_API_KEY")
         self.model = None
         self.ueba = BehaviorAnalyzer(time_window=60, threshold=5)
         self.geo = GeoEnricher()
         self.vt = VirusTotalEnricher()
-        
+        self.rate_limited_until = 0.0  # Timestamp until which we skip LLM
+
         if self.use_llm:
             if self.provider == "gemini" and self.api_key:
-                print("[*] Configuring Gemini Pro for Analysis...")
+                print(
+                    f"[*] {Colors.OKGREEN}Configuring Gemini Pro for Analysis...{Colors.ENDC}",
+                    flush=True,
+                )
                 genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                # We prioritize 2.0 Flash for speed and intelligence
+                self.model = genai.GenerativeModel("gemini-2.0-flash")
             elif self.provider == "ollama":
-                print(f"[*] Configuring Local Ollama LLM ({self.ollama_model}) at {self.ollama_url}...")
+                print(
+                    f"[*] {Colors.OKBLUE}Configuring Local Ollama LLM ({self.ollama_model}) at {self.ollama_url}...{Colors.ENDC}",
+                    flush=True,
+                )
             else:
                 self.use_llm = False
         else:
@@ -39,15 +71,25 @@ class Analyzer:
         if the log looks suspicious or interesting.
         """
         content = log_entry.get("content", "").lower()
-        
+
         # Extract IP for Enrichment
         ip = None
         match = re.search(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", content)
         if match:
             ip = match.group(1)
-            
+
         # Enrich Location Map
-        loc = self.geo.get_location(ip) if ip else {"country": "Unknown", "city": "Unknown", "lat": 0.0, "lon": 0.0, "alpha_3": "USA"}
+        loc = (
+            self.geo.get_location(ip)
+            if ip
+            else {
+                "country": "Unknown",
+                "city": "Unknown",
+                "lat": 0.0,
+                "lon": 0.0,
+                "alpha_3": "USA",
+            }
+        )
 
         # Base Analysis Dictionary
         base_result = {
@@ -61,9 +103,9 @@ class Analyzer:
             "alpha_3": loc["alpha_3"],
             "ip": ip,
             "mitre_tactic": "Unknown",
-            "mitre_technique": "Unknown"
+            "mitre_technique": "Unknown",
         }
-        
+
         # Check if this is an email
         if log_entry.get("type") == "email":
             return await self._analyze_email(log_entry, base_result)
@@ -72,82 +114,118 @@ class Analyzer:
         vt_data = self.vt.check_ip(ip) if ip else None
         if vt_data and vt_data.get("is_malicious"):
             result = base_result.copy()
-            result.update({
-                "risk_score": 100,
-                "analysis": vt_data["summary"],
-                "action": "Block IP (VirusTotal Intel)",
-                "mitre_tactic": "Command and Control",
-                "mitre_technique": "T1071 - Application Layer Protocol"
-            })
+            result.update(
+                {
+                    "risk_score": 100,
+                    "analysis": vt_data["summary"],
+                    "action": "Block IP (VirusTotal Intel)",
+                    "mitre_tactic": "Command and Control",
+                    "mitre_technique": "T1071 - Application Layer Protocol",
+                }
+            )
             return result
 
         # 1. Fast Pre-Filter (Don't waste LLM calls on noise)
         suspicious_keywords = [
-            "failed", "error", "denied", "segfault", "panic", "root", "admin",
-            "unauthorized", "refused", "attack", "malware", "virus", "trojan",
-            "tripwire", "honeypot", "shell", "bash", "exec", "nc", "python",
-            "injection", "union", "select", "script", "exploit", "cve"
+            "failed",
+            "error",
+            "denied",
+            "segfault",
+            "panic",
+            "root",
+            "admin",
+            "unauthorized",
+            "refused",
+            "attack",
+            "malware",
+            "virus",
+            "trojan",
+            "tripwire",
+            "honeypot",
+            "shell",
+            "bash",
+            "exec",
+            "nc",
+            "python",
+            "injection",
+            "union",
+            "select",
+            "script",
+            "exploit",
+            "cve",
         ]
-        
+
         is_suspicious = any(kw in content for kw in suspicious_keywords)
-        
+
         if not is_suspicious:
             result = base_result.copy()
-            result.update({
-                "risk_score": 0,
-                "analysis": "Routine Log",
-                "action": "Monitor"
-            })
+            result.update(
+                {"risk_score": 0, "analysis": "Routine Log", "action": "Monitor"}
+            )
             return result
 
         # 2. Deep Analysis (Gemini / Ollama)
-        if self.use_llm:
+        if self.use_llm and time.time() > self.rate_limited_until:
             try:
                 # We offload the blocking API call to a thread
-                response = await asyncio.to_thread(self._query_llm, log_entry['content'])
-                result = base_result.copy()
-                result.update({
-                    "risk_score": response.get("risk_score", 50),
-                    "analysis": response.get("summary", "AI Analysis Failed"),
-                    "action": response.get("action", "Monitor"),
-                    "mitre_tactic": response.get("mitre_tactic", "Unknown"),
-                    "mitre_technique": response.get("mitre_technique", "Unknown")
-                })
-                return result
-            except Exception as e:
-                print(f"[!] Gemini Analysis Error: {e}")
-                # Fallback to rules
+                response = await asyncio.to_thread(
+                    self._query_llm, log_entry["content"]
+                )
+
+                # Check for rate limit signal
+                if response.get("rate_limited"):
+                    # Fallback to rules immediately
+                    pass
+                else:
+                    result = base_result.copy()
+                    result.update(
+                        {
+                            "risk_score": response.get("risk_score", 50),
+                            "analysis": response.get("summary", "AI Analysis Failed"),
+                            "action": response.get("action", "Monitor"),
+                            "mitre_tactic": response.get("mitre_tactic", "Unknown"),
+                            "mitre_technique": response.get(
+                                "mitre_technique", "Unknown"
+                            ),
+                        }
+                    )
+                    return result
+            except Exception:
+                # Silently fall back to rules
+                pass
 
         # Check UEBA Stateful Analysis First (for behaviors across multiple logs)
         ueba_result = self.ueba.analyze(log_entry)
         if ueba_result:
             result = base_result.copy()
-            result.update({
-                "risk_score": ueba_result["risk_score"],
-                "analysis": ueba_result["analysis"],
-                "action": ueba_result["action"],
-                "mitre_tactic": ueba_result.get("mitre_tactic", "Unknown"),
-                "mitre_technique": ueba_result.get("mitre_technique", "Unknown")
-            })
+            result.update(
+                {
+                    "risk_score": ueba_result["risk_score"],
+                    "analysis": ueba_result["analysis"],
+                    "action": ueba_result["action"],
+                    "mitre_tactic": ueba_result.get("mitre_tactic", "Unknown"),
+                    "mitre_technique": ueba_result.get("mitre_technique", "Unknown"),
+                }
+            )
             return result
 
         # 3. Rule-Based Fallback (Single Line Analysis)
         risk_score = 50
         analysis = "Suspicious Activity Detected (Rule-Based)"
-        
+
         if "honeypot" in content or "tripwire" in content:
             risk_score = 100
             analysis = "Honeypot Triggered (Critical Action Required)"
         elif "failed password" in content or "authentication failure" in content:
             # We don't alert on single failure anymore, we rely on the UEBA module!
-            risk_score = 20  
+            risk_score = 20
             analysis = "Single Failed Login (Monitoring)"
         elif "root" in content:
             risk_score = 80
             analysis = "Privileged Access Attempt"
 
         result = base_result.copy()
-        
+
         # Rule Based Mitre Tactic Mapping
         mitre_tactic = "Unknown"
         mitre_technique = "Unknown"
@@ -160,18 +238,27 @@ class Analyzer:
         elif "Login" in analysis or "Brute" in analysis:
             mitre_tactic = "Credential Access"
             mitre_technique = "T1110 - Brute Force"
-            
-        result.update({
-            "risk_score": risk_score,
-            "analysis": analysis,
-            "action": "Monitor",
-            "mitre_tactic": mitre_tactic,
-            "mitre_technique": mitre_technique
-        })
+
+        result.update(
+            {
+                "risk_score": risk_score,
+                "analysis": analysis,
+                "action": "Monitor",
+                "mitre_tactic": mitre_tactic,
+                "mitre_technique": mitre_technique,
+            }
+        )
         return result
 
     def _query_llm(self, log_line):
         """Queries the configured LLM (Gemini or Ollama). Returns a dict."""
+        if self.provider == "gemini" and not self.model:
+            return {
+                "risk_score": 50,
+                "summary": "Gemini not initialized",
+                "action": "Manual Review",
+            }
+
         prompt = f"""
         You are an expert Security Operations Center (SOC) Analyst.
         Analyze the following system log entry for security threats.
@@ -192,14 +279,19 @@ class Analyzer:
                 response = self.model.generate_content(prompt)
                 text = response.text.strip()
             elif self.provider == "ollama":
-                headers = {'Content-Type': 'application/json'}
+                headers = {"Content-Type": "application/json"}
                 data = {
                     "model": self.ollama_model,
                     "prompt": prompt,
                     "stream": False,
-                    "format": "json"
+                    "format": "json",
                 }
-                resp = requests.post(f"{self.ollama_url}/api/generate", headers=headers, json=data, timeout=30)
+                resp = requests.post(
+                    f"{self.ollama_url}/api/generate",
+                    headers=headers,
+                    json=data,
+                    timeout=30,
+                )
                 resp.raise_for_status()
                 text = resp.json().get("response", "").strip()
             else:
@@ -211,57 +303,89 @@ class Analyzer:
             elif text.startswith("```"):
                 text = text[3:-3]
             return json.loads(text)
+        except exceptions.ResourceExhausted:
+            # Silence Quota Errors and set cooldown
+            self.rate_limited_until = time.time() + 60  # 1 minute cooldown
+            return {"rate_limited": True}
         except Exception as e:
-            print(f"[!] LLM Analysis Error: {e}")
-            return {"risk_score": 50, "summary": "AI Parsing Error", "action": "Manual Review"}
+            # Only print non-quota errors
+            if "429" not in str(e):
+                print(f"[!] LLM Analysis Error: {e}")
+            else:
+                self.rate_limited_until = time.time() + 60
+            return {
+                "risk_score": 50,
+                "summary": "AI Parsing Error",
+                "action": "Manual Review",
+            }
 
     async def _analyze_email(self, log_entry, base_result):
         """Analyzes an email event, checking URLs in VirusTotal and using the LLM for social engineering detection."""
         email_data = log_entry.get("email_data", {})
         body = email_data.get("body", "")
-        
+
         # 1. Extract URLs from body
-        urls = re.findall(r'(https?://[^\s]+)', body)
+        urls = re.findall(r"(https?://[^\s]+)", body)
         for url in urls:
             vt_data = self.vt.check_url(url)
             if vt_data and vt_data.get("is_malicious"):
                 result = base_result.copy()
-                result.update({
-                    "risk_score": 100,
-                    "analysis": f"Malicious URL detected in email: {url} ({vt_data['summary']})",
-                    "action": "Quarantine Email & Block Sender",
-                    "mitre_tactic": "Initial Access",
-                    "mitre_technique": "T1566 - Phishing"
-                })
+                result.update(
+                    {
+                        "risk_score": 100,
+                        "analysis": f"Malicious URL detected in email: {url} ({vt_data['summary']})",
+                        "action": "Quarantine Email & Block Sender",
+                        "mitre_tactic": "Initial Access",
+                        "mitre_technique": "T1566 - Phishing",
+                    }
+                )
                 return result
-                
+
         # 2. Deep Analysis (Gemini / Ollama)
-        if self.use_llm:
+        if self.use_llm and time.time() > self.rate_limited_until:
             try:
-                response = await asyncio.to_thread(self._query_llm_email, log_entry['content'])
-                result = base_result.copy()
-                result.update({
-                    "risk_score": response.get("risk_score", 50),
-                    "analysis": response.get("summary", "AI Analysis Failed"),
-                    "action": response.get("action", "Monitor"),
-                    "mitre_tactic": response.get("mitre_tactic", "Unknown"),
-                    "mitre_technique": response.get("mitre_technique", "Unknown")
-                })
-                return result
-            except Exception as e:
-                print(f"[!] Gemini Email Analysis Error: {e}")
-                
+                response = await asyncio.to_thread(
+                    self._query_llm_email, log_entry["content"]
+                )
+                if response.get("rate_limited"):
+                    pass
+                else:
+                    result = base_result.copy()
+                    result.update(
+                        {
+                            "risk_score": response.get("risk_score", 50),
+                            "analysis": response.get("summary", "AI Analysis Failed"),
+                            "action": response.get("action", "Monitor"),
+                            "mitre_tactic": response.get("mitre_tactic", "Unknown"),
+                            "mitre_technique": response.get(
+                                "mitre_technique", "Unknown"
+                            ),
+                        }
+                    )
+                    return result
+            except Exception:
+                pass
+
         # Fallback
         result = base_result.copy()
-        result.update({
-            "risk_score": 30,
-            "analysis": "Email Processed (No Deep AI config or errors occurred)",
-            "action": "Monitor"
-        })
+        result.update(
+            {
+                "risk_score": 30,
+                "analysis": "Email Processed (No Deep AI config or errors occurred)",
+                "action": "Monitor",
+            }
+        )
         return result
 
     def _query_llm_email(self, email_content):
         """Queries the LLM to inspect an email for phishing / social engineering."""
+        if self.provider == "gemini" and not self.model:
+            return {
+                "risk_score": 50,
+                "summary": "Gemini not initialized",
+                "action": "Manual Review",
+            }
+
         prompt = f"""
         You are an expert Security Operations Center (SOC) Analyst.
         Analyze the following parsed email entry for phishing, social engineering, or malware threats.
@@ -282,14 +406,19 @@ class Analyzer:
                 response = self.model.generate_content(prompt)
                 text = response.text.strip()
             elif self.provider == "ollama":
-                headers = {'Content-Type': 'application/json'}
+                headers = {"Content-Type": "application/json"}
                 data = {
                     "model": self.ollama_model,
                     "prompt": prompt,
                     "stream": False,
-                    "format": "json"
+                    "format": "json",
                 }
-                resp = requests.post(f"{self.ollama_url}/api/generate", headers=headers, json=data, timeout=30)
+                resp = requests.post(
+                    f"{self.ollama_url}/api/generate",
+                    headers=headers,
+                    json=data,
+                    timeout=30,
+                )
                 resp.raise_for_status()
                 text = resp.json().get("response", "").strip()
             else:
@@ -300,6 +429,16 @@ class Analyzer:
             elif text.startswith("```"):
                 text = text[3:-3]
             return json.loads(text)
+        except exceptions.ResourceExhausted:
+            self.rate_limited_until = time.time() + 60
+            return {"rate_limited": True}
         except Exception as e:
-            print(f"[!] LLM Email Analysis Error: {e}")
-            return {"risk_score": 50, "summary": "AI Parsing Error", "action": "Manual Review"}
+            if "429" not in str(e):
+                print(f"[!] LLM Email Analysis Error: {e}")
+            else:
+                self.rate_limited_until = time.time() + 60
+            return {
+                "risk_score": 50,
+                "summary": "AI Parsing Error",
+                "action": "Manual Review",
+            }
